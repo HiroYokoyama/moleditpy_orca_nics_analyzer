@@ -1525,3 +1525,56 @@ class TestMap2DSliceControls:
         assert dlg.icss_tab.slice_group.title() == "Slice → 2D"
         # Verify show_cut_axis is child of slice_group
         assert dlg.icss_tab.show_cut_axis.parentWidget() is dlg.icss_tab.slice_group
+
+
+class TestHeaderAndVectorSettings:
+    def test_two_line_header_layout_structure(self, make_dialog, single_out):
+        from PyQt6.QtWidgets import QHBoxLayout
+
+        dlg = make_dialog(single_out)
+        # Header settings layout has two QHBoxLayout rows
+        rows = [child for child in dlg.findChildren(QHBoxLayout) if child.count() > 0]
+        assert len(rows) >= 2
+
+        assert dlg._vector_chk.text() == "Show NICS_zz vector"
+        assert dlg._probe_chk.text() == "Show probe atoms"
+        assert dlg.axis_combo.isEnabled()
+
+    def test_top_header_vector_checkbox_toggles_actor_and_syncs(
+        self, make_dialog, volume_out, fake_plotter
+    ):
+        pytest.importorskip("pyvista")
+        dlg = make_dialog(volume_out)
+        dlg._vector_chk.setChecked(True)
+        assert dlg.icss_tab.show_vector.isChecked()
+        names = {
+            call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list
+        }
+        assert ACTOR_AXIS_VECTOR in names
+
+        dlg._vector_chk.setChecked(False)
+        assert not dlg.icss_tab.show_vector.isChecked()
+
+    def test_vector_rendering_for_planar_output(
+        self, make_dialog, plane_out, fake_plotter
+    ):
+        pytest.importorskip("pyvista")
+        dlg = make_dialog(plane_out)
+        dlg._vector_chk.setChecked(True)
+        names = {
+            call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list
+        }
+        assert ACTOR_AXIS_VECTOR in names
+
+    def test_vector_checkbox_disabled_without_tensors(self, make_dialog, single_out):
+        parser = NicsParser()
+        parser.load(single_out)
+        for entry in parser.data["shieldings"].values():
+            entry["tensor"] = None
+        parser.data["has_tensors"] = False
+        dlg = NicsAnalyzerDialog(parser, MagicMock())
+        try:
+            assert not dlg._vector_chk.isEnabled()
+        finally:
+            dlg.close()
+

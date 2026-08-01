@@ -121,15 +121,51 @@ class NicsAnalyzerDialog(QDialog):
     def _build_ui(self):
         layout = QVBoxLayout(self)
 
-        # ---- header row (always visible) -----------------------------------
-        header = QHBoxLayout()
+        # ---- header settings (2 lines, always visible) ---------------------
+        header_layout = QVBoxLayout()
+
+        # Line 1: Actions & 3D view display options
+        row1 = QHBoxLayout()
 
         self._open_btn = QPushButton("Open File…")
         self._open_btn.setToolTip("Open an ORCA output file with NICS ghost-atom data.")
         self._open_btn.clicked.connect(self.open_file_dialog)
-        header.addWidget(self._open_btn)
+        row1.addWidget(self._open_btn)
 
-        header.addWidget(QLabel("NICS_zz axis:"))
+        self._probe_chk = QCheckBox("Show probe atoms")
+        self._probe_chk.setChecked(False)  # hidden by default
+        self._probe_chk.setToolTip(
+            "Include ghost/probe atoms when loading the molecule into the 3D viewer."
+        )
+        self._probe_chk.toggled.connect(self._on_probe_visibility_toggled)
+        self._probe_chk.setEnabled(False)
+        row1.addWidget(self._probe_chk)
+
+        self._vector_chk = QCheckBox("Show NICS_zz vector")
+        self._vector_chk.setChecked(False)
+        self._vector_chk.setToolTip(
+            "Display the NICS_zz axis vector as a 3D arrow in the viewer."
+        )
+        self._vector_chk.toggled.connect(self._on_vector_toggled)
+        self._vector_chk.setEnabled(False)
+        row1.addWidget(self._vector_chk)
+
+        row1.addStretch(1)
+
+        self._export_btn = QPushButton("Export all…")
+        self._export_btn.setToolTip(
+            "Write the probe CSV, the summary and every available cube into one folder."
+        )
+        self._export_btn.clicked.connect(self.export_all)
+        self._export_btn.setEnabled(False)
+        row1.addWidget(self._export_btn)
+
+        header_layout.addLayout(row1)
+
+        # Line 2: Axis projection configuration
+        row2 = QHBoxLayout()
+
+        row2.addWidget(QLabel("NICS_zz axis:"))
         self.axis_combo = QComboBox()
         for label, mode in AXIS_CHOICES:
             self.axis_combo.addItem(label, mode)
@@ -139,10 +175,10 @@ class NicsAnalyzerDialog(QDialog):
         )
         self.axis_combo.currentIndexChanged.connect(self._on_axis_changed)
         self.axis_combo.setEnabled(False)
-        header.addWidget(self.axis_combo)
+        row2.addWidget(self.axis_combo)
 
         self._axis_vector_label = QLabel("Vector:")
-        header.addWidget(self._axis_vector_label)
+        row2.addWidget(self._axis_vector_label)
         self._axis_vector = []
         for component in "xyz":
             spin = QDoubleSpinBox()
@@ -153,31 +189,16 @@ class NicsAnalyzerDialog(QDialog):
             spin.setValue(1.0 if component == "z" else 0.0)
             spin.valueChanged.connect(self._on_axis_changed)
             self._axis_vector.append(spin)
-            header.addWidget(spin)
+            row2.addWidget(spin)
         self._axis_vector_label.setVisible(False)
         for spin in self._axis_vector:
             spin.setVisible(False)
 
-        self._probe_chk = QCheckBox("Show probe atoms")
-        self._probe_chk.setChecked(False)  # hidden by default
-        self._probe_chk.setToolTip(
-            "Include ghost/probe atoms when loading the molecule into the 3D viewer."
-        )
-        self._probe_chk.toggled.connect(self._on_probe_visibility_toggled)
-        self._probe_chk.setEnabled(False)
-        header.addWidget(self._probe_chk)
+        row2.addStretch(1)
 
-        header.addStretch(1)
+        header_layout.addLayout(row2)
 
-        self._export_btn = QPushButton("Export all…")
-        self._export_btn.setToolTip(
-            "Write the probe CSV, the summary and every available cube into one folder."
-        )
-        self._export_btn.clicked.connect(self.export_all)
-        self._export_btn.setEnabled(False)
-        header.addWidget(self._export_btn)
-
-        layout.addLayout(header)
+        layout.addLayout(header_layout)
 
         # ---- stacked body: welcome or tabs ---------------------------------
         self._stack = QStackedWidget()
@@ -285,6 +306,8 @@ class NicsAnalyzerDialog(QDialog):
             else None
         )
 
+        self.icss_tab.show_vector.toggled.connect(self._sync_vector_chk_from_icss)
+
         self.summary = QTextEdit()
         self.summary.setReadOnly(True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
@@ -311,19 +334,28 @@ class NicsAnalyzerDialog(QDialog):
         # Enable controls that require loaded data.
         self.axis_combo.setEnabled(True)
         self._probe_chk.setEnabled(True)
+        self._vector_chk.setEnabled(True)
         self._export_btn.setEnabled(True)
 
-        # axis_combo: disable NICS_zz when there are no tensors.
+        # axis_combo & _vector_chk: disable NICS_zz when there are no tensors.
         if not self.field.has_tensors:
             self.axis_combo.setEnabled(False)
             self.axis_combo.setToolTip(
                 "This output has no shielding tensors, so NICS_zz cannot be computed."
+            )
+            self._vector_chk.setEnabled(False)
+            self._vector_chk.setToolTip(
+                "This output has no shielding tensors, so NICS_zz vector cannot be shown."
             )
         else:
             self.axis_combo.setEnabled(True)
             self.axis_combo.setToolTip(
                 "The direction NICS_zz is projected onto. ICSS maps use the grid "
                 "normal; single probes are usually quoted against the ring normal."
+            )
+            self._vector_chk.setEnabled(True)
+            self._vector_chk.setToolTip(
+                "Display the NICS_zz axis vector as a 3D arrow in the viewer."
             )
 
         self._build_tabs()
@@ -341,6 +373,8 @@ class NicsAnalyzerDialog(QDialog):
             elif self.field.layout["kind"] == "plane":
                 self.map_tab.refresh(force=True)
         self._refresh_3d_plane_if_map_visible()
+        if self._vector_chk.isChecked():
+            self.icss_tab.update_axis_vector()
 
     # -- public API ----------------------------------------------------------
 
@@ -470,6 +504,7 @@ class NicsAnalyzerDialog(QDialog):
         axis_index = self.axis_combo.findData(settings["axis_mode"])
         self.axis_combo.blockSignals(True)
         self._probe_chk.blockSignals(True)
+        self._vector_chk.blockSignals(True)
         for spin in self._axis_vector:
             spin.blockSignals(True)
         try:
@@ -485,9 +520,11 @@ class NicsAnalyzerDialog(QDialog):
                         settings["axis_mode"], self._custom_axis_values()
                     )
             self._probe_chk.setChecked(bool(settings["show_probes"]))
+            self._vector_chk.setChecked(bool(settings["icss_show_vector"]))
         finally:
             self.axis_combo.blockSignals(False)
             self._probe_chk.blockSignals(False)
+            self._vector_chk.blockSignals(False)
             for spin in self._axis_vector:
                 spin.blockSignals(False)
 
@@ -531,7 +568,7 @@ class NicsAnalyzerDialog(QDialog):
             "icss_positive": self.icss_tab.show_positive.isChecked(),
             "icss_negative": self.icss_tab.show_negative.isChecked(),
             "icss_cut_axis": self.icss_tab.show_cut_axis.isChecked(),
-            "icss_show_vector": self.icss_tab.show_vector.isChecked(),
+            "icss_show_vector": self._vector_chk.isChecked(),
         }
 
     def _save_settings(self):
@@ -643,8 +680,14 @@ class NicsAnalyzerDialog(QDialog):
         elif hasattr(self, "map_tab") and widget is self.map_tab:
             self.map_tab.refresh(force=True)
             self._refresh_3d_plane_if_map_visible()
+            if self._vector_chk.isChecked():
+                self.icss_tab.update_axis_vector()
         elif hasattr(self, "scan_tab") and widget is self.scan_tab:
             self.scan_tab.refresh(force=True)
+            if self._vector_chk.isChecked():
+                self.icss_tab.update_axis_vector()
+        elif self._vector_chk.isChecked():
+            self.icss_tab.update_axis_vector()
 
     def _custom_axis_values(self):
         return tuple(float(spin.value()) for spin in self._axis_vector)
@@ -671,7 +714,22 @@ class NicsAnalyzerDialog(QDialog):
         self._refresh_map_if_visible()
         self.icss_tab._update_cache_label()
         self.icss_tab.draw(silent=True)
+        self.icss_tab.update_axis_vector()
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
+
+    def _on_vector_toggled(self, checked):
+        if hasattr(self, "icss_tab") and hasattr(self.icss_tab, "show_vector"):
+            if self.icss_tab.show_vector.isChecked() != checked:
+                self.icss_tab.show_vector.blockSignals(True)
+                self.icss_tab.show_vector.setChecked(checked)
+                self.icss_tab.show_vector.blockSignals(False)
+            self.icss_tab.update_axis_vector()
+
+    def _sync_vector_chk_from_icss(self, checked):
+        if hasattr(self, "_vector_chk") and self._vector_chk.isChecked() != checked:
+            self._vector_chk.blockSignals(True)
+            self._vector_chk.setChecked(checked)
+            self._vector_chk.blockSignals(False)
 
     def _on_probe_visibility_toggled(self, checked):
         self._load_molecule(include_probes=checked)

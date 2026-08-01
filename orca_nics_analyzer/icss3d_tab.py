@@ -496,12 +496,9 @@ class Icss3DTab(QWidget):
         if plotter is None:
             return
         self._remove(plotter, ACTOR_AXIS_VECTOR)
-        if (
-            not self.show_vector.isChecked()
-            or self.field.layout.get("kind") != "volume"
-        ):
+        if not self.show_vector.isChecked():
             return
-        if not self.field.probes:
+        if not self.field or not self.field.probes:
             return
         axis = np.asarray(self.field.axis_for(self.field.probes[0]), dtype=float)
         norm = np.linalg.norm(axis)
@@ -515,7 +512,18 @@ class Icss3DTab(QWidget):
         )
         coords = self.field.layout.get("coords", ())
         spans = [float(values[-1] - values[0]) for values in coords if len(values) > 1]
-        scale = max(spans, default=2.0) * 0.35
+
+        if len(self.field.real_coords):
+            mol_span = float(np.max(np.ptp(self.field.real_coords, axis=0)))
+        elif len(self.field.probe_coords):
+            mol_span = float(np.max(np.ptp(self.field.probe_coords, axis=0)))
+        else:
+            mol_span = 2.0
+
+        scale = max(spans, default=max(mol_span, 2.0)) * 0.35
+        if not np.isfinite(scale) or scale <= 0:
+            scale = 2.0
+
         arrow = pv.Arrow(
             start=origin - axis * scale * 0.5,
             direction=axis,
