@@ -26,6 +26,7 @@ class NicsField:
     def __init__(self, parser, axis_mode="grid", custom_axis=None):
         self.parser = parser
         self.filename = getattr(parser, "filename", None)
+        self._validate_axis(axis_mode, custom_axis)
         self.axis_mode = axis_mode
         self.custom_axis = custom_axis
         self._override_stack_axis = None
@@ -60,6 +61,21 @@ class NicsField:
         self._axes_cache = None
         self.probes = self._build_probes()
 
+    @staticmethod
+    def _validate_axis(mode, custom_axis=None):
+        if mode not in AXIS_MODES and mode != "custom":
+            raise ValueError(
+                f"unknown NICS_zz axis mode {mode!r}; "
+                f"expected one of {AXIS_MODES + ('custom',)}"
+            )
+        if mode == "custom":
+            if custom_axis is None:
+                raise ValueError("custom NICS_zz axis requires a 3-vector")
+            axis = np.asarray(custom_axis, dtype=float)
+            if axis.shape != (3,) or not np.all(np.isfinite(axis)):
+                raise ValueError("custom NICS_zz axis must be a finite 3-vector")
+            if np.linalg.norm(axis) < 1e-12:
+                raise ValueError("custom NICS_zz axis must be non-zero")
     # -- axes ------------------------------------------------------------
     def stack_axis_index(self):
         """Which lattice axis the grid is sliced along.
@@ -164,6 +180,7 @@ class NicsField:
         return out
 
     def set_axis_mode(self, mode, custom_axis=None):
+        self._validate_axis(mode, custom_axis)
         self.axis_mode = mode
         self.custom_axis = custom_axis
         for probe in self.probes:
@@ -174,7 +191,9 @@ class NicsField:
 
     def values(self, component):
         """Flat list of NICS values in probe order; missing entries are NaN."""
-        key = "iso" if component == "iso" else "zz"
+        if component not in COMPONENTS:
+            raise ValueError(f"unknown NICS component {component!r}")
+        key = component
         return np.array(
             [np.nan if p[key] is None else p[key] for p in self.probes], dtype=float
         )

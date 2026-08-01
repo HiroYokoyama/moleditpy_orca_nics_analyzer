@@ -80,6 +80,21 @@ class TestAxisModes:
             _, zz = expected_nics(probe["xyz"], axis)
             assert probe["zz"] == pytest.approx(zz, abs=0.01)
 
+    @pytest.mark.parametrize("mode", ["bogus", ""])
+    def test_invalid_axis_mode_is_rejected(self, single_out, mode):
+        field = load_field(single_out)
+        with pytest.raises(ValueError, match="axis mode"):
+            field.set_axis_mode(mode)
+
+    def test_invalid_custom_axis_is_rejected(self, single_out):
+        field = load_field(single_out)
+        with pytest.raises(ValueError, match="finite 3-vector"):
+            field.set_axis_mode("custom", [0.0, 0.0, float("nan")])
+
+    def test_unknown_component_is_rejected(self, single_out):
+        field = load_field(single_out)
+        with pytest.raises(ValueError, match="component"):
+            field.values("anisotropy")
     def test_ring_mode_uses_the_ring_normal(self, single_out):
         field = load_field(single_out, axis_mode="ring")
         probe = field.probes[0]
