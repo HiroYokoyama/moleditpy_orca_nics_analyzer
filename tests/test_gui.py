@@ -1115,12 +1115,12 @@ class TestMap2DSliceControls:
     ):
         dlg_plane = make_dialog(plane_out)
         # plane_out has 1 slice in volume sense
-        assert not dlg_plane.icss_tab.slice_spin.isVisible()
-        assert not dlg_plane.icss_tab.goto_2d_btn.isVisible()
+        assert dlg_plane.icss_tab.slice_spin.isHidden()
+        assert dlg_plane.icss_tab.goto_2d_btn.isHidden()
 
         dlg_vol = make_dialog(volume_out)
-        assert dlg_vol.icss_tab.slice_spin.isVisible()
-        assert dlg_vol.icss_tab.goto_2d_btn.isVisible()
+        assert not dlg_vol.icss_tab.slice_spin.isHidden()
+        assert not dlg_vol.icss_tab.goto_2d_btn.isHidden()
 
     def test_show_map_tab_method(self, make_dialog, volume_out):
         dlg = make_dialog(volume_out)
