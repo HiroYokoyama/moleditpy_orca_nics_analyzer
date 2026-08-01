@@ -133,7 +133,7 @@ class Icss3DTab(QWidget):
         self.show_negative = QCheckBox("Diatropic (-)")
         self.show_negative.setChecked(True)
         grid.addWidget(self.show_negative, 2, 3)
-        
+
         self.show_cut_axis = QCheckBox("Cut axis preview")
         self.show_cut_axis.setChecked(True)
         self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
@@ -171,7 +171,7 @@ class Icss3DTab(QWidget):
         row.addWidget(clear)
         row.addStretch(1)
         layout.addLayout(row)
-        
+
         self._build_cube_ui(layout)
 
     def _on_auto_toggled(self, checked):
@@ -247,11 +247,14 @@ class Icss3DTab(QWidget):
         cmap_name, _, _ = self._cmap_and_span()
         try:
             import matplotlib.colors as mcolors
+
             try:
                 from matplotlib import colormaps
+
                 cmap = colormaps[cmap_name]
             except ImportError:
                 from matplotlib import cm
+
                 cmap = cm.get_cmap(cmap_name)
 
             color_neg = mcolors.to_hex(cmap(0.0))
@@ -338,39 +341,63 @@ class Icss3DTab(QWidget):
         plotter = self._plotter()
         if plotter is None:
             return
-            
+
         self._remove(plotter, ACTOR_CUT_AXIS)
         self._remove(plotter, ACTOR_CUT_AXIS + "_edge")
 
         # Draw cut axis plane for volumes if checked
-        if self.show_cut_axis.isChecked() and self.field.is_gridded and self.field.layout["kind"] == "volume":
+        if (
+            self.show_cut_axis.isChecked()
+            and self.field.is_gridded
+            and self.field.layout["kind"] == "volume"
+        ):
             stack_idx = self.field.stack_axis_index()
             if stack_idx is not None:
                 axes = self.field.layout["axes"]
                 coords = self.field.layout["coords"]
-                
+
                 # The other two axes span the plane
                 idx1, idx2 = [i for i in range(3) if i != stack_idx]
-                
+
                 # Center of the stack axis
                 stack_center = np.mean(coords[stack_idx])
-                
+
                 # Bounds of the other two axes
                 c1_min, c1_max = coords[idx1][0], coords[idx1][-1]
                 c2_min, c2_max = coords[idx2][0], coords[idx2][-1]
-                
+
                 origin = self.field.layout["origin"]
-                
+
                 # Corners of the plane
-                p00 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_min + axes[idx2] * c2_min
-                p10 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_max + axes[idx2] * c2_min
-                p01 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_min + axes[idx2] * c2_max
-                p11 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_max + axes[idx2] * c2_max
-                
+                p00 = (
+                    origin
+                    + axes[stack_idx] * stack_center
+                    + axes[idx1] * c1_min
+                    + axes[idx2] * c2_min
+                )
+                p10 = (
+                    origin
+                    + axes[stack_idx] * stack_center
+                    + axes[idx1] * c1_max
+                    + axes[idx2] * c2_min
+                )
+                p01 = (
+                    origin
+                    + axes[stack_idx] * stack_center
+                    + axes[idx1] * c1_min
+                    + axes[idx2] * c2_max
+                )
+                p11 = (
+                    origin
+                    + axes[stack_idx] * stack_center
+                    + axes[idx1] * c1_max
+                    + axes[idx2] * c2_max
+                )
+
                 plane = pv.StructuredGrid()
                 plane.points = np.vstack((p00, p10, p01, p11))
                 plane.dimensions = (2, 2, 1)
-                
+
                 plotter.add_mesh(
                     plane,
                     color="#ff9900",

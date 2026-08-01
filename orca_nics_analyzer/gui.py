@@ -3,7 +3,7 @@
 import logging
 import os
 
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -71,13 +71,10 @@ class _WelcomeWidget(QWidget):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         hint = QLabel(
-            "Drop an ORCA output file here\n"
-            "or use the  Open File…  button above."
+            "Drop an ORCA output file here\nor use the  Open File…  button above."
         )
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hint.setStyleSheet(
-            "color: palette(mid); font-size: 14px; padding: 40px;"
-        )
+        hint.setStyleSheet("color: palette(mid); font-size: 14px; padding: 40px;")
         layout.addWidget(hint)
 
         btn = QPushButton("Open File…")
@@ -124,9 +121,7 @@ class NicsAnalyzerDialog(QDialog):
         header = QHBoxLayout()
 
         self._open_btn = QPushButton("Open File…")
-        self._open_btn.setToolTip(
-            "Open an ORCA output file with NICS ghost-atom data."
-        )
+        self._open_btn.setToolTip("Open an ORCA output file with NICS ghost-atom data.")
         self._open_btn.clicked.connect(self.open_file_dialog)
         header.addWidget(self._open_btn)
 
@@ -222,24 +217,36 @@ class NicsAnalyzerDialog(QDialog):
 
         # Sync color mapping settings between the two tabs
         self.map_tab.cmap.currentTextChanged.connect(
-            lambda t: self.icss_tab.cmap.setCurrentText(t) if self.icss_tab.cmap.currentText() != t else None
+            lambda t: self.icss_tab.cmap.setCurrentText(t)
+            if self.icss_tab.cmap.currentText() != t
+            else None
         )
         self.icss_tab.cmap.currentTextChanged.connect(
-            lambda t: self.map_tab.cmap.setCurrentText(t) if self.map_tab.cmap.currentText() != t else None
+            lambda t: self.map_tab.cmap.setCurrentText(t)
+            if self.map_tab.cmap.currentText() != t
+            else None
         )
-        
+
         self.map_tab.vmax.valueChanged.connect(
-            lambda v: self.icss_tab.vmax.setValue(v) if self.icss_tab.vmax.value() != v else None
+            lambda v: self.icss_tab.vmax.setValue(v)
+            if self.icss_tab.vmax.value() != v
+            else None
         )
         self.icss_tab.vmax.valueChanged.connect(
-            lambda v: self.map_tab.vmax.setValue(v) if self.map_tab.vmax.value() != v else None
+            lambda v: self.map_tab.vmax.setValue(v)
+            if self.map_tab.vmax.value() != v
+            else None
         )
-        
+
         self.map_tab.auto_range.toggled.connect(
-            lambda c: self.icss_tab.auto_range.setChecked(c) if self.icss_tab.auto_range.isChecked() != c else None
+            lambda c: self.icss_tab.auto_range.setChecked(c)
+            if self.icss_tab.auto_range.isChecked() != c
+            else None
         )
         self.icss_tab.auto_range.toggled.connect(
-            lambda c: self.map_tab.auto_range.setChecked(c) if self.map_tab.auto_range.isChecked() != c else None
+            lambda c: self.map_tab.auto_range.setChecked(c)
+            if self.map_tab.auto_range.isChecked() != c
+            else None
         )
 
         self.map_tab.stack_axis_combo.currentIndexChanged.connect(
@@ -301,7 +308,7 @@ class NicsAnalyzerDialog(QDialog):
 
         Returns True on success, False on failure (error already shown to user).
         """
-        from . import _read_output_file, _warn
+        from . import _read_output_file
         from .parser import NicsParser
 
         mw = self.context.get_main_window()
@@ -487,9 +494,7 @@ class NicsAnalyzerDialog(QDialog):
             try:
                 icss.clear_actors()
             except (RuntimeError, AttributeError) as e:
-                logging.warning(
-                    "[orca_nics_analyzer] clearing actors on reload: %s", e
-                )
+                logging.warning("[orca_nics_analyzer] clearing actors on reload: %s", e)
 
     def _cleanup(self):
         """Take our actors out of the host viewer and release the window slot.

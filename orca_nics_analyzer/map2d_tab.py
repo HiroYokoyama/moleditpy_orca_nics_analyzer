@@ -156,10 +156,12 @@ class Map2DTab(QWidget):
         self.stack_axis_label = QLabel("Cut axis:")
         grid.addWidget(self.stack_axis_label, 4, 0)
         self.stack_axis_combo = QComboBox()
-        self.stack_axis_combo.addItems(["Lattice axis 1", "Lattice axis 2", "Lattice axis 3"])
+        self.stack_axis_combo.addItems(
+            ["Lattice axis 1", "Lattice axis 2", "Lattice axis 3"]
+        )
         self.stack_axis_combo.currentIndexChanged.connect(self._on_stack_axis_changed)
         grid.addWidget(self.stack_axis_combo, 4, 1, 1, 2)
-        
+
         self.stack_axis_label.setVisible(False)
         self.stack_axis_combo.setVisible(False)
 
@@ -192,9 +194,7 @@ class Map2DTab(QWidget):
         s1d.addWidget(self._slice1d_label)
 
         self._slice1d_btn = QPushButton("→ 1D Scan tab")
-        self._slice1d_btn.setToolTip(
-            "Send this 1D profile to the 1D Scan tab."
-        )
+        self._slice1d_btn.setToolTip("Send this 1D profile to the 1D Scan tab.")
         self._slice1d_btn.clicked.connect(self._emit_slice_to_1d)
         s1d.addWidget(self._slice1d_btn)
 
@@ -223,7 +223,7 @@ class Map2DTab(QWidget):
     def _configure_slices(self):
         if not self.field.is_gridded:
             return
-            
+
         is_volume = self.field.layout["kind"] == "volume"
         self.stack_axis_label.setVisible(is_volume)
         self.stack_axis_combo.setVisible(is_volume)
@@ -231,7 +231,7 @@ class Map2DTab(QWidget):
             self.stack_axis_combo.blockSignals(True)
             self.stack_axis_combo.setCurrentIndex(self.field.stack_axis_index())
             self.stack_axis_combo.blockSignals(False)
-            
+
         try:
             info = self.field.plane_data(self._component())
         except ValueError:
@@ -373,7 +373,7 @@ class Map2DTab(QWidget):
         a1, a2 = info["a1"], info["a2"]
 
         show_arrow = hasattr(self, "show_cut_axis") and self.show_cut_axis.isChecked()
-        
+
         if not show_arrow:
             return
 
@@ -382,14 +382,24 @@ class Map2DTab(QWidget):
             if idx < len(a1):
                 x = a1[idx]
                 ax.axvline(
-                    x, color="#ff9900", lw=1.2, linestyle="--", alpha=0.85, label=f"1D slice (axis-1 row {idx})"
+                    x,
+                    color="#ff9900",
+                    lw=1.2,
+                    linestyle="--",
+                    alpha=0.85,
+                    label=f"1D slice (axis-1 row {idx})",
                 )
         else:
             # Fix a column of a2 -> y is fixed, draw a HORIZONTAL line at y = a2[idx]
             if idx < len(a2):
                 y = a2[idx]
                 ax.axhline(
-                    y, color="#ff9900", lw=1.2, linestyle="--", alpha=0.85, label=f"1D slice (axis-2 col {idx})"
+                    y,
+                    color="#ff9900",
+                    lw=1.2,
+                    linestyle="--",
+                    alpha=0.85,
+                    label=f"1D slice (axis-2 col {idx})",
                 )
 
     def _slice_offset(self, info):

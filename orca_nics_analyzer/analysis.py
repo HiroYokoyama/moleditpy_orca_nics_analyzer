@@ -250,7 +250,9 @@ class NicsField:
         info["slice_index"] = index
         return info
 
-    def extract_line(self, component, fixed_in_plane_axis, fixed_index, stack_index=None):
+    def extract_line(
+        self, component, fixed_in_plane_axis, fixed_index, stack_index=None
+    ):
         """Extract a 1D profile from a 2D plane or one layer of a 3D volume.
 
         Slices the in-plane 2D grid by fixing one in-plane coordinate and
@@ -280,7 +282,7 @@ class NicsField:
         si = stack_index if stack_index is not None else base["slice_index"]
         info = self.plane_slice(component, si)
 
-        values_2d = info["values"]   # shape (n_a1, n_a2)
+        values_2d = info["values"]  # shape (n_a1, n_a2)
         a1 = info["a1"]
         a2 = info["a2"]
 

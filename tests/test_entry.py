@@ -109,4 +109,3 @@ class TestMenuAction:
         callback()
         previous.raise_.assert_called_once()
         previous.activateWindow.assert_called_once()
-

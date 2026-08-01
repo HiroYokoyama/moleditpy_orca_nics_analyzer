@@ -14,7 +14,7 @@ import logging
 import os
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.3.8"
+PLUGIN_VERSION = "0.3.9"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
@@ -116,7 +116,10 @@ def initialize(context):
                 existing.activateWindow()
                 return
             except (RuntimeError, AttributeError):
-                logging.debug("[orca_nics_analyzer] failed to raise existing window", exc_info=True)
+                logging.debug(
+                    "[orca_nics_analyzer] failed to raise existing window",
+                    exc_info=True,
+                )
 
         mw = context.get_main_window()
         from .gui import NicsAnalyzerDialog

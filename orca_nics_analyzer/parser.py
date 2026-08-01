@@ -226,7 +226,11 @@ class NicsParser:
                         "tensor": None,
                     }
                 except ValueError:
-                    logging.debug("[orca_nics_analyzer] failed to parse summary line: %r", lines[i], exc_info=True)
+                    logging.debug(
+                        "[orca_nics_analyzer] failed to parse summary line: %r",
+                        lines[i],
+                        exc_info=True,
+                    )
                 blanks = 0
             elif _blank(lines[i]):
                 blanks += 1

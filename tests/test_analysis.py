@@ -485,4 +485,3 @@ class TestExtractLine:
         field = load_field(plane_out)
         data = field.extract_line("iso", 0, 0)
         assert np.all(data["offsets"] == 0.0)
-

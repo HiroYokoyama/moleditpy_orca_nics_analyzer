@@ -4,7 +4,6 @@ Sign convention throughout: ``NICS = -sigma``. A negative NICS is diatropic
 (aromatic), a positive one paratropic (antiaromatic).
 """
 
-
 try:
     import numpy as np
 except ImportError:  # CI installs pytest only
