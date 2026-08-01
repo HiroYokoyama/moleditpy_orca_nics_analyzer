@@ -353,16 +353,18 @@ class Map2DTab(QWidget):
         ax.set_aspect("equal", adjustable="datalim")
         ax.set_anchor("C")
 
-        offset = self._slice_offset(info)
+        position_label = self._slice_position_label(info)
         title = f"{label} map"
         if info["n_slices"] > 1:
             title += f" — slice {info['slice_index'] + 1}/{info['n_slices']}"
-        if offset is not None:
-            title += f" ({offset:+.2f} Å from the ring plane)"
+        if position_label is not None:
+            title += f" ({position_label})"
         ax.set_title(title, fontsize=10)
 
         if hasattr(self, "_set_slice_value_label"):
-            self._set_slice_value_label("-" if offset is None else f"{offset:+.2f} Å")
+            self._set_slice_value_label(
+                "-" if position_label is None else position_label
+            )
 
         self.canvas.draw_idle()
 
@@ -400,6 +402,21 @@ class Map2DTab(QWidget):
                     alpha=0.85,
                     label=f"1D slice (axis-2 col {idx})",
                 )
+
+    def _slice_position_label(self, info):
+        """Describe the selected 3D slice without mislabeling its axis."""
+        ring_normal = self.field.mean_ring_normal
+        if ring_normal is not None:
+            alignment = abs(float(np.dot(info["normal"], ring_normal)))
+            if alignment >= 0.9:
+                offset = self._slice_offset(info)
+                if offset is not None:
+                    return f"{offset:+.2f} Å from the ring plane"
+
+        axis_index = info["order"][2]
+        coords = self.field.layout["coords"][axis_index]
+        coordinate = float(coords[info["slice_index"]])
+        return f"lattice axis {axis_index + 1} = {coordinate:+.2f} Å"
 
     def _slice_offset(self, info):
         """Signed distance from the ring plane to this slice, along the normal."""

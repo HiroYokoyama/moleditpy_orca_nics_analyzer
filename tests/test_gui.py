@@ -23,7 +23,7 @@ pytestmark = pytest.mark.usefixtures("qapp", "no_modals")
 
 
 @pytest.fixture
-def make_dialog(fake_context, request):
+def make_dialog(fake_context, request, tmp_path):
     """Build a dialog for a fixture output and close it afterwards."""
     created = []
 
@@ -32,7 +32,9 @@ def make_dialog(fake_context, request):
         if path is not None:
             parser = NicsParser()
             parser.load(path)
-        dialog = NicsAnalyzerDialog(parser, fake_context)
+        dialog = NicsAnalyzerDialog(
+            parser, fake_context, settings_file=str(tmp_path / "settings.json")
+        )
         created.append(dialog)
         return dialog
 
@@ -618,6 +620,16 @@ class TestMapTab:
         dialog = make_dialog(plane_out)
         assert dialog.icss_tab.slice_slider.maximum() == 0
 
+    def test_alternate_3d_slice_axis_uses_coordinate_title(
+        self, make_dialog, volume_out
+    ):
+        dialog = make_dialog(volume_out)
+        dialog.field.set_stack_axis(1)
+        info = dialog.field.plane_slice("zz", 2)
+        title = dialog.map_tab._slice_position_label(info)
+        assert "lattice axis 2" in title
+        assert "from the ring plane" not in title
+
     def test_slice_slider_spans_a_volume(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
         assert dialog.icss_tab.slice_slider.maximum() == 4
@@ -980,6 +992,24 @@ class TestTabSync:
         dlg.icss_tab.cmap.setCurrentText("coolwarm")
         assert dlg.map_tab.cmap.currentText() == "coolwarm"
 
+    def test_dialog_settings_round_trip(self, make_dialog, volume_out):
+        first = make_dialog(volume_out)
+        first.axis_combo.setCurrentIndex(2)
+        first._probe_chk.setChecked(True)
+        first.map_tab.levels.setValue(47)
+        first.map_tab.show_contours.setChecked(False)
+        first.icss_tab.opacity.setValue(0.8)
+        first.icss_tab.show_negative.setChecked(False)
+        first._save_settings()
+
+        second = make_dialog(volume_out)
+        assert second.axis_combo.currentData() == "x"
+        assert second._probe_chk.isChecked()
+        assert second.map_tab.levels.value() == 47
+        assert not second.map_tab.show_contours.isChecked()
+        assert second.icss_tab.opacity.value() == pytest.approx(0.8)
+        assert not second.icss_tab.show_negative.isChecked()
+
     def test_map_range_updates_3d_compatibility_state(self, make_dialog, volume_out):
         dlg = make_dialog(volume_out)
 
@@ -1079,35 +1109,45 @@ class TestExportAll:
 
 
 class TestLifecycle:
-    def test_close_releases_the_window_slot(self, volume_out, fake_context):
+    def test_close_releases_the_window_slot(self, volume_out, fake_context, tmp_path):
         parser = NicsParser()
         parser.load(volume_out)
-        dialog = NicsAnalyzerDialog(parser, fake_context)
+        dialog = NicsAnalyzerDialog(
+            parser, fake_context, settings_file=str(tmp_path / "settings.json")
+        )
         dialog.close()
         fake_context.register_window.assert_called_with("nics_analyzer", None)
 
-    def test_close_clears_the_actors(self, volume_out, fake_context, fake_plotter):
+    def test_close_clears_the_actors(
+        self, volume_out, fake_context, fake_plotter, tmp_path
+    ):
         pytest.importorskip("pyvista")
         parser = NicsParser()
         parser.load(volume_out)
-        dialog = NicsAnalyzerDialog(parser, fake_context)
+        dialog = NicsAnalyzerDialog(
+            parser, fake_context, settings_file=str(tmp_path / "settings.json")
+        )
         dialog.icss_tab.draw()
         fake_plotter.reset_mock()
         dialog.close()
         assert fake_plotter.remove_actor.called
 
-    def test_escape_also_cleans_up(self, volume_out, fake_context):
+    def test_escape_also_cleans_up(self, volume_out, fake_context, tmp_path):
         """Rejecting a dialog never raises a close event."""
         parser = NicsParser()
         parser.load(volume_out)
-        dialog = NicsAnalyzerDialog(parser, fake_context)
+        dialog = NicsAnalyzerDialog(
+            parser, fake_context, settings_file=str(tmp_path / "settings.json")
+        )
         dialog.reject()
         fake_context.register_window.assert_called_with("nics_analyzer", None)
 
-    def test_cleanup_runs_once(self, volume_out, fake_context):
+    def test_cleanup_runs_once(self, volume_out, fake_context, tmp_path):
         parser = NicsParser()
         parser.load(volume_out)
-        dialog = NicsAnalyzerDialog(parser, fake_context)
+        dialog = NicsAnalyzerDialog(
+            parser, fake_context, settings_file=str(tmp_path / "settings.json")
+        )
         dialog.close()
         fake_context.register_window.reset_mock()
         dialog.close()

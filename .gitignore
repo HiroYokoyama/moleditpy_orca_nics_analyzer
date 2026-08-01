@@ -213,3 +213,7 @@ __marimo__/
 *_nics_cubes/
 .pytest-temp/
 pytest-of-*/
+
+# Persisted ORCA NICS Analyzer user preferences
+
+orca_nics_analyzer/settings.json

@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 
 from . import PLUGIN_VERSION
 from .analysis import NicsField, export_all
+from .settings import SETTINGS_FILE, load_settings, save_settings
 
 #: Label -> axis_mode for the NICS_zz reference direction.
 AXIS_CHOICES = (
@@ -91,7 +92,7 @@ class NicsAnalyzerDialog(QDialog):
     onto the dialog.
     """
 
-    def __init__(self, parser, context, parent=None):
+    def __init__(self, parser, context, parent=None, settings_file=None):
         super().__init__(parent)
         # Do NOT set Qt.WindowType.Dialog — that would make the dialog
         # application-modal and prevent the user from interacting with the main
@@ -102,6 +103,7 @@ class NicsAnalyzerDialog(QDialog):
             | Qt.WindowType.WindowMinMaxButtonsHint
         )
         self.context = context
+        self.settings_file = settings_file or SETTINGS_FILE
         self.field = None
 
         self.setWindowTitle("ORCA NICS Analyzer")
@@ -269,6 +271,7 @@ class NicsAnalyzerDialog(QDialog):
             self.tabs.currentWidget() is self.scan_tab
         )
 
+        self._load_settings()
         self._select_default_tab()
 
     def _apply_parser(self, parser):
@@ -424,6 +427,73 @@ class NicsAnalyzerDialog(QDialog):
                         return
         event.ignore()
 
+    # -- persistent user preferences -----------------------------------------
+
+    @staticmethod
+    def _set_combo_data(combo, value):
+        if not combo.isEnabled():
+            return
+        index = combo.findData(value)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+    def _load_settings(self):
+        settings = load_settings(self.settings_file)
+        axis_index = self.axis_combo.findData(settings["axis_mode"])
+        self.axis_combo.blockSignals(True)
+        self._probe_chk.blockSignals(True)
+        try:
+            if axis_index >= 0 and self.axis_combo.isEnabled():
+                self.axis_combo.setCurrentIndex(axis_index)
+            self._probe_chk.setChecked(bool(settings["show_probes"]))
+        finally:
+            self.axis_combo.blockSignals(False)
+            self._probe_chk.blockSignals(False)
+
+        self._set_combo_data(self.map_tab.component, settings["map_component"])
+        self.map_tab.cmap.setCurrentText(settings["map_colormap"])
+        self.map_tab.levels.setValue(int(settings["map_levels"]))
+        self.map_tab.auto_range.setChecked(bool(settings["map_auto_range"]))
+        self.map_tab.vmax.setValue(float(settings["map_range"]))
+        self.map_tab.show_molecule.setChecked(bool(settings["map_molecule"]))
+        self.map_tab.show_contours.setChecked(bool(settings["map_contours"]))
+        self.map_tab.show_probes.setChecked(bool(settings["map_probes"]))
+        self.map_tab.show_1d_line.setChecked(bool(settings["map_slice_line"]))
+
+        self._set_combo_data(self.icss_tab.component, settings["icss_component"])
+        self.icss_tab.cmap.setCurrentText(settings["icss_colormap"])
+        self.icss_tab.isovalue.setValue(float(settings["icss_isovalue"]))
+        self.icss_tab.opacity.setValue(float(settings["icss_opacity"]))
+        self.icss_tab.show_positive.setChecked(bool(settings["icss_positive"]))
+        self.icss_tab.show_negative.setChecked(bool(settings["icss_negative"]))
+        self.icss_tab.show_cut_axis.setChecked(bool(settings["icss_cut_axis"]))
+
+    def _settings_values(self):
+        return {
+            "axis_mode": self.axis_combo.currentData(),
+            "show_probes": self._probe_chk.isChecked(),
+            "map_component": self.map_tab.component.currentData(),
+            "map_colormap": self.map_tab.cmap.currentText(),
+            "map_levels": self.map_tab.levels.value(),
+            "map_range": self.map_tab.vmax.value(),
+            "map_auto_range": self.map_tab.auto_range.isChecked(),
+            "map_molecule": self.map_tab.show_molecule.isChecked(),
+            "map_contours": self.map_tab.show_contours.isChecked(),
+            "map_probes": self.map_tab.show_probes.isChecked(),
+            "map_slice_line": self.map_tab.show_1d_line.isChecked(),
+            "icss_component": self.icss_tab.component.currentData(),
+            "icss_colormap": self.icss_tab.cmap.currentText(),
+            "icss_isovalue": self.icss_tab.isovalue.value(),
+            "icss_opacity": self.icss_tab.opacity.value(),
+            "icss_positive": self.icss_tab.show_positive.isChecked(),
+            "icss_negative": self.icss_tab.show_negative.isChecked(),
+            "icss_cut_axis": self.icss_tab.show_cut_axis.isChecked(),
+        }
+
+    def _save_settings(self):
+        if hasattr(self, "map_tab") and hasattr(self, "icss_tab"):
+            save_settings(self._settings_values(), self.settings_file)
+
     # -- tab selection / hints -----------------------------------------------
 
     def _select_default_tab(self):
@@ -573,6 +643,7 @@ class NicsAnalyzerDialog(QDialog):
         if getattr(self, "_cleaned_up", False):
             return
         self._cleaned_up = True
+        self._save_settings()
         self._shutdown_tabs()
         try:
             # Releasing the registry slot is what lets the next open create a
