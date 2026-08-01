@@ -583,6 +583,36 @@ class TestMapTab:
         dialog = make_dialog(plane_out)
         assert dialog.map_tab.figure.axes
 
+    def test_range_and_auto_controls_use_distinct_cells(
+        self, make_dialog, plane_out, volume_out
+    ):
+        dialog = make_dialog(plane_out)
+        map_layout = dialog.map_tab.auto_range.parentWidget().layout()
+        map_auto = map_layout.getItemPosition(
+            map_layout.indexOf(dialog.map_tab.auto_range)
+        )
+        map_vmax = map_layout.getItemPosition(map_layout.indexOf(dialog.map_tab.vmax))
+        assert map_auto[:2] != map_vmax[:2]
+
+        dialog = make_dialog(volume_out)
+        icss_layout = dialog.icss_tab.auto_range.parentWidget().layout()
+        icss_auto = icss_layout.getItemPosition(
+            icss_layout.indexOf(dialog.icss_tab.auto_range)
+        )
+        icss_vmax = icss_layout.getItemPosition(
+            icss_layout.indexOf(dialog.icss_tab.vmax)
+        )
+        assert icss_auto[:2] != icss_vmax[:2]
+
+    def test_map_axes_are_centered_with_a_data_limit_aspect(
+        self, make_dialog, plane_out
+    ):
+        dialog = make_dialog(plane_out)
+        ax = dialog.map_tab.figure.axes[0]
+        assert ax.get_aspect() == 1.0
+        assert ax.get_adjustable() == "datalim"
+        assert ax.get_anchor() == "C"
+
     def test_auto_range_fills_the_spin_box(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
         assert dialog.map_tab.vmax.value() > 0

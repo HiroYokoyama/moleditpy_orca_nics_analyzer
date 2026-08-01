@@ -168,9 +168,8 @@ class Icss3DTab(QWidget):
         self.auto_range = QCheckBox("Auto")
         self.auto_range.setChecked(True)
         self.auto_range.toggled.connect(self._on_auto_toggled)
-        grid.addWidget(
-            self.auto_range, 3, 4 if grid.columnCount() > 4 else 3
-        )  # or add next to vmax
+        # Keep Auto in its own row so it cannot overlap the range control.
+        grid.addWidget(self.auto_range, 4, 3)
 
         layout.addWidget(controls)
 

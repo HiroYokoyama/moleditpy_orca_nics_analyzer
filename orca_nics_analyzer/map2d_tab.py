@@ -76,7 +76,7 @@ class Map2DTab(QWidget):
             )
             return
 
-        self.figure = Figure(figsize=(6, 5), tight_layout=True)
+        self.figure = Figure(figsize=(6, 5), layout="constrained")
         self.canvas = FigureCanvas(self.figure)
         layout.addWidget(NavigationToolbar(self.canvas, self))
         layout.addWidget(self.canvas, 1)
@@ -340,7 +340,9 @@ class Map2DTab(QWidget):
         bar.set_label(f"{label} / ppm")
         ax.set_xlabel("in-plane axis 1 / Å")
         ax.set_ylabel("in-plane axis 2 / Å")
-        ax.set_aspect("equal")
+        # Keep the map centered in the available axes beside the colorbar.
+        ax.set_aspect("equal", adjustable="datalim")
+        ax.set_anchor("C")
 
         offset = self._slice_offset(info)
         title = f"{label} map"
