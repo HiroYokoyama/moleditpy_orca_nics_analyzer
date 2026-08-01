@@ -348,6 +348,11 @@ class NicsAnalyzerDialog(QDialog):
                 "and an NMR job that includes them.",
             )
             return False
+        if not parser.data.get("probe_indices"):
+            from . import _warn_missing_shieldings
+
+            _warn_missing_shieldings(self)
+            return False
 
         self.load_parser(parser)
         return True

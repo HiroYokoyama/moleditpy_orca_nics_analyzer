@@ -54,6 +54,18 @@ def _warn(parent, title, text):
     QMessageBox.critical(parent, title, text)
 
 
+def _warn_missing_shieldings(parent):
+    from PyQt6.QtWidgets import QMessageBox
+
+    QMessageBox.warning(
+        parent,
+        "No NICS shielding data found",
+        "This output contains ghost centres, but no matching NMR shielding "
+        "values were parsed. Check that the NMR calculation included the ghost "
+        "centres in its nuclei selection.",
+    )
+
+
 def _open_file(path, context):
     """Parse an ORCA output and load its data into the analyzer window.
 
@@ -80,6 +92,9 @@ def _open_file(path, context):
             "NICS requires ghost centres (e.g. 'H:' or 'Bq') in the geometry "
             "and an NMR job that includes them.",
         )
+        return
+    if not parser.data.get("probe_indices"):
+        _warn_missing_shieldings(mw)
         return
 
     existing = context.get_window("nics_analyzer")

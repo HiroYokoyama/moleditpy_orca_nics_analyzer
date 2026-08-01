@@ -9,7 +9,7 @@ import logging
 import re
 
 # " Nucleus   8H :"  /  " Nucleus  12H:"  /  " Nucleus   0C  :"
-_NUCLEUS_RE = re.compile(r"^\s*Nucleus\s+(\d+)\s*([A-Za-z]{1,2})\s*:?\s*$")
+_NUCLEUS_RE = re.compile(r"^\s*Nucleus\s+(\d+)\s*([A-Za-z][A-Za-z0-9]*)\s*:?\s*$")
 # "   0 C     6.0000    0    12.011    1.522993   -2.161091   -0.015611"
 _AU_ROW_RE = re.compile(
     r"^\s*(\d+)\s+(\S+)\s+([-+0-9.]+)\s+(\d+)\s+([-+0-9.]+)"
@@ -19,9 +19,15 @@ _AU_ROW_RE = re.compile(
 _ANG_ROW_RE = re.compile(
     r"^\s*([A-Za-z]{1,2}\s*:?)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*$"
 )
+_NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][-+]?\d+)?"
 _TENSOR_ROW_RE = re.compile(
-    r"^\s*([-+]?\d+\.\d+)\s+([-+]?\d+\.\d+)\s+([-+]?\d+\.\d+)\s*$"
+    rf"^\s*({_NUMBER})\s+({_NUMBER})\s+({_NUMBER})\s*$"
 )
+
+
+def _as_float(value):
+    """Parse Fortran-style exponents as well as normal floats."""
+    return float(value.replace("D", "E").replace("d", "e"))
 
 
 def _blank(line):
@@ -61,6 +67,8 @@ class NicsParser:
         return self.data
 
     def load_from_memory(self, content, path=None):
+        if not isinstance(content, str):
+            raise TypeError("ORCA output content must be text")
         self.filename = path
         self.data = self._empty()
         lines = content.splitlines()
@@ -221,8 +229,8 @@ class NicsParser:
                     idx = int(parts[0])
                     self.data["shieldings"][idx] = {
                         "symbol": parts[1],
-                        "iso": float(parts[2]),
-                        "aniso": float(parts[3]),
+                        "iso": _as_float(parts[2]),
+                        "aniso": _as_float(parts[3]),
                         "tensor": None,
                     }
                 except ValueError:
@@ -280,7 +288,7 @@ class NicsParser:
             m = _TENSOR_ROW_RE.match(lines[i])
             if not m:
                 return None
-            rows.append([float(m.group(k)) for k in (1, 2, 3)])
+            rows.append([_as_float(m.group(k)) for k in (1, 2, 3)])
             i += 1
         return rows if len(rows) == 3 else None
 
