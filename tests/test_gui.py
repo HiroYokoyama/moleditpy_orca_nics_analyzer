@@ -860,12 +860,23 @@ class TestIcssTab:
         make_dialog(plane_out)
         assert fake_plotter.add_mesh.call_count == 0
 
-    def test_2d_tab_has_no_3d_plane_button(self, make_dialog, plane_out):
+    def test_2d_tab_offers_3d_plane_button(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
-        assert not any(
+        assert any(
             button.text() == "Show in 3D view"
             for button in dialog.map_tab.findChildren(QPushButton)
         )
+        assert any(
+            button.text() == "Clear from 3D view"
+            for button in dialog.map_tab.findChildren(QPushButton)
+        )
+
+    def test_show_plane_in_3d(self, make_dialog, plane_out, fake_plotter):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(plane_out)
+        dialog.map_tab._emit_show_in_3d()
+        assert fake_plotter.add_mesh.call_count >= 1
+        assert "Map plane added" in dialog.icss_tab.status.text()
 
     def test_switching_to_2d_clears_3d_actors(
         self, make_dialog, volume_out, fake_plotter

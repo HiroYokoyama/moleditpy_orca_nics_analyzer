@@ -215,6 +215,7 @@ class NicsAnalyzerDialog(QDialog):
             self,
             show_in_3d=self._show_plane_in_3d,
             show_slice_in_1d=self._show_slice_in_1d,
+            clear_3d=self.icss_tab.clear_actors,
         )
         self.tabs.addTab(self.map_tab, "2D Map")
         self.tabs.addTab(self.icss_tab, "3D ICSS")

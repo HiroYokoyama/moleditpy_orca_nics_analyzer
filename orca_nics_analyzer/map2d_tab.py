@@ -53,11 +53,14 @@ class Map2DTab(QWidget):
     supplied by the parent dialog to route extracted 1D slices to the scan tab.
     """
 
-    def __init__(self, field, parent=None, show_in_3d=None, show_slice_in_1d=None):
+    def __init__(
+        self, field, parent=None, show_in_3d=None, show_slice_in_1d=None, clear_3d=None
+    ):
         super().__init__(parent)
         self.field = field
         self._show_in_3d = show_in_3d
         self._show_slice_in_1d = show_slice_in_1d
+        self._clear_3d = clear_3d
         self._is_tab_visible = lambda: True
         self.canvas = None
         self.figure = None
@@ -188,6 +191,16 @@ class Map2DTab(QWidget):
         # ---- bottom buttons --------------------------------------------
         buttons = QHBoxLayout()
         buttons.addStretch(1)
+        if self._show_in_3d is not None:
+            btn3d = QPushButton("Show in 3D view")
+            btn3d.setToolTip("Show this 2D map plane in the host 3D viewer.")
+            btn3d.clicked.connect(self._emit_show_in_3d)
+            buttons.addWidget(btn3d)
+        if self._clear_3d is not None:
+            clear3d = QPushButton("Clear from 3D view")
+            clear3d.setToolTip("Remove this plugin's graphics from the host 3D viewer.")
+            clear3d.clicked.connect(self._clear_3d)
+            buttons.addWidget(clear3d)
         csv_btn = QPushButton("Export grid CSV...")
         csv_btn.clicked.connect(self.export_csv)
         buttons.addWidget(csv_btn)
