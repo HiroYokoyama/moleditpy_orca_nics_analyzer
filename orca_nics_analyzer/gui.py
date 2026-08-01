@@ -53,6 +53,10 @@ def _xyz_block(atoms, include_probes):
         if not include_probes and atom["is_ghost"]:
             continue
         sym = atom["symbol"]
+        # MoleditPy/RDKit treats "H:" as real Hydrogen (fails chemistry).
+        # Emit "X" so it is parsed as a dummy atom (atomic number 0).
+        if atom.get("is_ghost"):
+            sym = "X"
         x, y, z = atom["xyz"]
         lines.append(f"{sym}  {x:.8f}  {y:.8f}  {z:.8f}")
     return "\n".join(lines)
@@ -352,7 +356,7 @@ class NicsAnalyzerDialog(QDialog):
         name = os.path.basename(self.field.filename or "NICS molecule")
         try:
             self._loading_structure = True
-            self.context.show_xyz_data(xyz, source_name=name, skip_chemistry=include_probes)
+            self.context.show_xyz_data(xyz, source_name=name)
             plotter = self._plotter()
             if plotter is not None:
                 plotter.reset_camera()
