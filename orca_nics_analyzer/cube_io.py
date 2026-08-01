@@ -110,13 +110,20 @@ def stamp_line(version, component, shape, axis=None, source=None, axis_mode=None
         parts.append(f"axis_mode={axis_mode}")
     if source:
         parts.append(f"source={os.path.basename(source)}")
+        try:
+            stat = os.stat(source)
+            parts.append(f"source_size={stat.st_size}")
+            parts.append(f"source_mtime_ns={stat.st_mtime_ns}")
+        except OSError:
+            pass
     return " ".join(parts)
 
 
 def read_generation_settings(filepath):
     """What a cached cube was written with; unknown fields come back None."""
     info = {
-        "version": None, "component": None, "grid": None, "axis": None, "axis_mode": None
+        "version": None, "component": None, "grid": None, "axis": None, "axis_mode": None,
+        "source_name": None, "source_size": None, "source_mtime_ns": None
     }
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
@@ -141,6 +148,15 @@ def read_generation_settings(filepath):
     m = re.search(r"axis_mode=(\S+)", stamp)
     if m:
         info["axis_mode"] = m.group(1)
+    m = re.search(r"source=(\S+)", stamp)
+    if m:
+        info["source_name"] = m.group(1)
+    m = re.search(r"source_size=(\d+)", stamp)
+    if m:
+        info["source_size"] = int(m.group(1))
+    m = re.search(r"source_mtime_ns=(\d+)", stamp)
+    if m:
+        info["source_mtime_ns"] = int(m.group(1))
     return info
 
 

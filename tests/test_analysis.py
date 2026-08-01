@@ -354,6 +354,14 @@ class TestCubes:
         )
         assert field.cached_cube("zz") is None
 
+    def test_cache_is_rejected_when_the_source_changes(self, volume_out, tmp_path):
+        source = tmp_path / "run.out"
+        source.write_bytes(open(volume_out, "rb").read())
+        field = load_field(str(source))
+        field.ensure_cube("zz", plugin_version="0.1.0")
+        with open(source, "ab") as fh:
+            fh.write(b"\nchanged")
+        assert field.cached_cube("zz") is None
     def test_cache_is_rejected_when_the_zz_axis_mode_changes(
         self, volume_out, tmp_path
     ):

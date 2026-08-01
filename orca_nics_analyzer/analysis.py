@@ -456,6 +456,20 @@ class NicsField:
         info = cube_io.read_generation_settings(path)
         if info.get("component") and info["component"] != component:
             return None
+        if self.filename and info.get("version"):
+            source_name = info.get("source_name")
+            if source_name and source_name != os.path.basename(self.filename):
+                return None
+            try:
+                stat = os.stat(self.filename)
+            except OSError:
+                return None
+            if info.get("source_size") is None or info.get("source_mtime_ns") is None:
+                return None
+            if (stat.st_size, stat.st_mtime_ns) != (
+                info["source_size"], info["source_mtime_ns"]
+            ):
+                return None
         if self.is_gridded:
             try:
                 expected_cube, _, _ = self.grid(component)
