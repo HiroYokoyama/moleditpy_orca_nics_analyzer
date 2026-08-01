@@ -104,7 +104,10 @@ def initialize(context):
 
         mw = context.get_main_window()
         path, _ = QFileDialog.getOpenFileName(
-            mw, "Open ORCA Output with NICS Data", "", "ORCA Output (*.out *.log);;All Files (*)"
+            mw,
+            "Open ORCA Output with NICS Data",
+            "",
+            "ORCA Output (*.out *.log);;All Files (*)",
         )
         if path:
             _open_file(path, context)

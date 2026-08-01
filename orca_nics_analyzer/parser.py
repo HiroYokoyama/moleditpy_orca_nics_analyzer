@@ -85,11 +85,15 @@ class NicsParser:
         functions but no nucleus prints ``ZA`` as 0.0. The Angstrom block is
         used for the coordinates themselves so no unit conversion is needed.
         """
-        ang = self._last_block(lines, "CARTESIAN COORDINATES (ANGSTROEM)", self._read_ang)
+        ang = self._last_block(
+            lines, "CARTESIAN COORDINATES (ANGSTROEM)", self._read_ang
+        )
         au = self._last_block(lines, "CARTESIAN COORDINATES (A.U.)", self._read_au)
 
         if not ang and not au:
-            self.data["warnings"].append("No Cartesian coordinates found in the output.")
+            self.data["warnings"].append(
+                "No Cartesian coordinates found in the output."
+            )
             return
 
         atoms = []

@@ -17,13 +17,56 @@ except ImportError:  # CI installs pytest only
 BOHR_PER_ANGSTROM = 1.0 / 0.52917720859
 
 ATOMIC_NUMBERS = {
-    "H": 1, "He": 2, "Li": 3, "Be": 4, "B": 5, "C": 6, "N": 7, "O": 8,
-    "F": 9, "Ne": 10, "Na": 11, "Mg": 12, "Al": 13, "Si": 14, "P": 15,
-    "S": 16, "Cl": 17, "Ar": 18, "K": 19, "Ca": 20, "Sc": 21, "Ti": 22,
-    "V": 23, "Cr": 24, "Mn": 25, "Fe": 26, "Co": 27, "Ni": 28, "Cu": 29,
-    "Zn": 30, "Ga": 31, "Ge": 32, "As": 33, "Se": 34, "Br": 35, "Kr": 36,
-    "Ru": 44, "Rh": 45, "Pd": 46, "Ag": 47, "Sn": 50, "Sb": 51, "Te": 52,
-    "I": 53, "Xe": 54, "Pt": 78, "Au": 79, "Hg": 80, "Pb": 82, "Bi": 83,
+    "H": 1,
+    "He": 2,
+    "Li": 3,
+    "Be": 4,
+    "B": 5,
+    "C": 6,
+    "N": 7,
+    "O": 8,
+    "F": 9,
+    "Ne": 10,
+    "Na": 11,
+    "Mg": 12,
+    "Al": 13,
+    "Si": 14,
+    "P": 15,
+    "S": 16,
+    "Cl": 17,
+    "Ar": 18,
+    "K": 19,
+    "Ca": 20,
+    "Sc": 21,
+    "Ti": 22,
+    "V": 23,
+    "Cr": 24,
+    "Mn": 25,
+    "Fe": 26,
+    "Co": 27,
+    "Ni": 28,
+    "Cu": 29,
+    "Zn": 30,
+    "Ga": 31,
+    "Ge": 32,
+    "As": 33,
+    "Se": 34,
+    "Br": 35,
+    "Kr": 36,
+    "Ru": 44,
+    "Rh": 45,
+    "Pd": 46,
+    "Ag": 47,
+    "Sn": 50,
+    "Sb": 51,
+    "Te": 52,
+    "I": 53,
+    "Xe": 54,
+    "Pt": 78,
+    "Au": 79,
+    "Hg": 80,
+    "Pb": 82,
+    "Bi": 83,
 }
 
 
@@ -32,7 +75,9 @@ def cube_dir_for(out_path):
     if not out_path:
         return None
     base = os.path.splitext(os.path.basename(out_path))[0]
-    return os.path.join(os.path.dirname(os.path.abspath(out_path)), f"{base}_nics_cubes")
+    return os.path.join(
+        os.path.dirname(os.path.abspath(out_path)), f"{base}_nics_cubes"
+    )
 
 
 def cube_path_for(out_path, component, tag=None):

@@ -4,7 +4,6 @@ Sign convention throughout: ``NICS = -sigma``. A negative NICS is diatropic
 (aromatic), a positive one paratropic (antiaromatic).
 """
 
-import math
 
 try:
     import numpy as np
@@ -15,15 +14,56 @@ BOHR_PER_ANGSTROM = 1.0 / 0.52917720859
 
 #: Covalent radii in Angstrom, enough for the elements NICS work involves.
 COVALENT_RADII = {
-    "H": 0.31, "He": 0.28, "Li": 1.28, "Be": 0.96, "B": 0.84, "C": 0.76,
-    "N": 0.71, "O": 0.66, "F": 0.57, "Ne": 0.58, "Na": 1.66, "Mg": 1.41,
-    "Al": 1.21, "Si": 1.11, "P": 1.07, "S": 1.05, "Cl": 1.02, "Ar": 1.06,
-    "K": 2.03, "Ca": 1.76, "Sc": 1.70, "Ti": 1.60, "V": 1.53, "Cr": 1.39,
-    "Mn": 1.39, "Fe": 1.32, "Co": 1.26, "Ni": 1.24, "Cu": 1.32, "Zn": 1.22,
-    "Ga": 1.22, "Ge": 1.20, "As": 1.19, "Se": 1.20, "Br": 1.20, "Kr": 1.16,
-    "Ru": 1.46, "Rh": 1.42, "Pd": 1.39, "Ag": 1.45, "Sn": 1.39, "Sb": 1.39,
-    "Te": 1.38, "I": 1.39, "Xe": 1.40, "Pt": 1.36, "Au": 1.36, "Hg": 1.32,
-    "Pb": 1.46, "Bi": 1.48,
+    "H": 0.31,
+    "He": 0.28,
+    "Li": 1.28,
+    "Be": 0.96,
+    "B": 0.84,
+    "C": 0.76,
+    "N": 0.71,
+    "O": 0.66,
+    "F": 0.57,
+    "Ne": 0.58,
+    "Na": 1.66,
+    "Mg": 1.41,
+    "Al": 1.21,
+    "Si": 1.11,
+    "P": 1.07,
+    "S": 1.05,
+    "Cl": 1.02,
+    "Ar": 1.06,
+    "K": 2.03,
+    "Ca": 1.76,
+    "Sc": 1.70,
+    "Ti": 1.60,
+    "V": 1.53,
+    "Cr": 1.39,
+    "Mn": 1.39,
+    "Fe": 1.32,
+    "Co": 1.26,
+    "Ni": 1.24,
+    "Cu": 1.32,
+    "Zn": 1.22,
+    "Ga": 1.22,
+    "Ge": 1.20,
+    "As": 1.19,
+    "Se": 1.20,
+    "Br": 1.20,
+    "Kr": 1.16,
+    "Ru": 1.46,
+    "Rh": 1.42,
+    "Pd": 1.39,
+    "Ag": 1.45,
+    "Sn": 1.39,
+    "Sb": 1.39,
+    "Te": 1.38,
+    "I": 1.39,
+    "Xe": 1.40,
+    "Pt": 1.36,
+    "Au": 1.36,
+    "Hg": 1.32,
+    "Pb": 1.46,
+    "Bi": 1.48,
 }
 _DEFAULT_RADIUS = 1.5
 
@@ -109,8 +149,8 @@ def bond_list(symbols, coords, tolerance=0.45):
     bonds = []
     n = len(pos)
     for i in range(n):
-        d = np.linalg.norm(pos[i + 1:] - pos[i], axis=1)
-        limit = radii[i] + radii[i + 1:] + tolerance
+        d = np.linalg.norm(pos[i + 1 :] - pos[i], axis=1)
+        limit = radii[i] + radii[i + 1 :] + tolerance
         for offset in np.nonzero(d < limit)[0]:
             bonds.append((i, i + 1 + int(offset)))
     return bonds

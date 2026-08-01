@@ -190,9 +190,7 @@ class NicsField:
                 # A flat axis still needs a non-zero voxel vector for the cube
                 # format; 1 Angstrom keeps the slab visibly thin.
                 steps.append(1.0 * axes[a])
-        origin = layout["origin"] + sum(
-            float(coords[a][0]) * axes[a] for a in range(3)
-        )
+        origin = layout["origin"] + sum(float(coords[a][0]) * axes[a] for a in range(3))
         return cube, origin, np.array(steps)
 
     def plane_data(self, component):
@@ -240,6 +238,78 @@ class NicsField:
         info["values"] = arr[:, :, index]
         info["slice_index"] = index
         return info
+
+    # -- 1D scan ---------------------------------------------------------
+    @property
+    def is_scan(self):
+        """True when the probes lie on a line — the classic NICS scan."""
+        return self.layout["kind"] == "line"
+
+    def line_data(self, component=None):
+        """A NICS scan as ordered (distance, value) pairs.
+
+        The abscissa is the signed height above the nearest ring plane when a
+        ring is available — that is what a NICS scan is read against — and
+        otherwise the arc length along the probe line from its first point.
+        """
+        if self.layout["kind"] not in ("line", "single"):
+            raise ValueError("probe layout is not a line")
+
+        axis = self.layout["axes"][0]
+        origin = self.layout["origin"]
+        along = (self.probe_coords - origin) @ axis
+
+        heights = [p["height"] for p in self.probes]
+        use_height = self.rings and all(h is not None for h in heights)
+        if use_height:
+            distance = np.array(heights, dtype=float)
+            label = "height above the ring plane / A"
+            # A scan running "downwards" would otherwise plot back to front.
+            if np.corrcoef(along, distance)[0, 1] < 0:
+                axis = -axis
+        else:
+            distance = along - along.min()
+            label = "distance along the scan / A"
+
+        order = np.argsort(distance)
+        result = {
+            "distance": distance[order],
+            "label": label,
+            "axis": axis,
+            "indices": [self.probes[i]["idx"] for i in order],
+            "order": order,
+            "offsets": np.array(
+                [self.probes[i]["in_plane"] or 0.0 for i in order], dtype=float
+            ),
+        }
+        for comp in COMPONENTS:
+            result[comp] = self.values(comp)[order]
+        if component is not None:
+            result["values"] = result[component]
+        return result
+
+    def scan_extremum(self, component="zz"):
+        """(distance, value) of the largest-magnitude point of a scan."""
+        data = self.line_data()
+        values = data[component]
+        finite = np.isfinite(values)
+        if not finite.any():
+            return None, None
+        idx = int(np.nanargmax(np.abs(np.where(finite, values, np.nan))))
+        return float(data["distance"][idx]), float(values[idx])
+
+    def scan_csv(self):
+        data = self.line_data()
+        lines = ["Index,Distance/A,Offset/A,NICS(iso)/ppm,NICS_zz/ppm"]
+        for n, idx in enumerate(data["indices"]):
+            iso = data["iso"][n]
+            zz = data["zz"][n]
+            lines.append(
+                f"{idx},{data['distance'][n]:.4f},{data['offsets'][n]:.4f},"
+                f"{'' if not np.isfinite(iso) else f'{iso:.4f}'},"
+                f"{'' if not np.isfinite(zz) else f'{zz:.4f}'}"
+            )
+        return "\n".join(lines) + "\n"
 
     # -- cube export -----------------------------------------------------
     def cube_path(self, component, tag=None):
@@ -400,6 +470,12 @@ def export_all(field, folder=None, plugin_version="0.0.0"):
         fh.write(field.to_csv())
     written.append(csv_path)
 
+    if field.is_scan:
+        scan_path = os.path.join(folder, f"{base}_NICS_scan.csv")
+        with open(scan_path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(field.scan_csv())
+        written.append(scan_path)
+
     txt_path = os.path.join(folder, f"{base}_NICS_summary.txt")
     with open(txt_path, "w", encoding="utf-8", newline="") as fh:
         fh.write(field.summary_text(plugin_version) + "\n")
@@ -413,12 +489,12 @@ def export_all(field, folder=None, plugin_version="0.0.0"):
                 written.append(
                     field.write_cube(
                         component,
-                        path=os.path.join(
-                            folder, f"{base}_NICS_{component}.cube"
-                        ),
+                        path=os.path.join(folder, f"{base}_NICS_{component}.cube"),
                         plugin_version=plugin_version,
                     )
                 )
             except (ValueError, OSError) as e:
-                logging.warning("[orca_nics_analyzer] cube export (%s): %s", component, e)
+                logging.warning(
+                    "[orca_nics_analyzer] cube export (%s): %s", component, e
+                )
     return written

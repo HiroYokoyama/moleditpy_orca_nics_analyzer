@@ -18,8 +18,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "sample_outputs")
 
 BOHR = 1.0 / 0.52917720859
-RING_K = 30.0   # ppm * A^3, the ring-current dipole strength
-ISO_K = 8.0     # ppm * A^2, scalar term so NICS(iso) is not identically zero
+RING_K = 30.0  # ppm * A^3, the ring-current dipole strength
+ISO_K = 8.0  # ppm * A^2, scalar term so NICS(iso) is not identically zero
 
 # Benzene, D6h, in the xy plane.
 _R_CC, _R_CH = 1.3970, 1.0870
@@ -140,9 +140,7 @@ def build_output(ghost_points, title, ghost_symbol="H"):
         eig = np.linalg.eigvalsh(0.5 * (t + t.T))
         a(" Diagonalized sT*s matrix:")
         a(" ")
-        a(
-            "        ---------------  ---------------  ---------------"
-        )
+        a("        ---------------  ---------------  ---------------")
         a(
             f" Total   {eig[0]:15.3f}  {eig[1]:14.3f}  {eig[2]:14.3f}  "
             f"iso= {np.trace(t) / 3.0:11.3f}"
@@ -172,6 +170,11 @@ def plane_points(n=9, half=3.0, height=1.0):
     return np.array([[x, y, height] for x in steps for y in steps])
 
 
+def scan_points(n=11, start=0.0, stop=5.0):
+    """A NICS scan: probes marching up the ring normal."""
+    return np.array([[0.0, 0.0, z] for z in np.linspace(start, stop, n)])
+
+
 def volume_points(n_xy=5, half=3.0, n_z=5, half_z=2.0):
     xy = np.linspace(-half, half, n_xy)
     z = np.linspace(-half_z, half_z, n_z)
@@ -185,6 +188,7 @@ def main():
             [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -1.0]],
             "NICS single probes",
         ),
+        "benzene_nics_scan.out": (scan_points(), "NICS 1D scan along the normal"),
         "benzene_nics_plane.out": (plane_points(), "NICS 2D plane scan"),
         "benzene_nics_volume.out": (volume_points(), "NICS 3D ICSS volume"),
         "benzene_no_ghosts.out": ([], "plain NMR, no NICS probes"),

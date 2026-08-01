@@ -10,13 +10,18 @@ on:
 permissions:
   contents: read
 
+env:
+  QT_QPA_PLATFORM: offscreen
+
 jobs:
   # -------------------------------------------------------------------------
-  # Standard unit tests — no external dependencies required
+  # Full suite, with the real PyQt6 / matplotlib / pyvista stack so the GUI
+  # and the isosurface code are genuinely exercised rather than mocked.
   # -------------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
 
@@ -28,15 +33,48 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install system libraries for Qt and VTK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libglx-mesa0 libxkbcommon-x11-0 libdbus-1-3 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libxcb-xinerama0 libxrender1
+
       - name: Install dependencies
-        run: pip install pytest pytest-cov
+        run: pip install pytest pytest-cov numpy matplotlib PyQt6 pyvista
 
       - name: Run tests with coverage
         run: python -m pytest tests/ -v --tb=short --cov=orca_nics_analyzer --cov-report=term-missing
 
   # -------------------------------------------------------------------------
-  # Integration tests — clones the main MoleditPy app to enable real
-  # PluginContext tests (TestWithRealPluginContext)
+  # The package must import and the pure-Python analysis must run when the
+  # optional plotting stack is absent — the host loads plugins at startup.
+  # -------------------------------------------------------------------------
+  test-minimal:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies (no Qt, no matplotlib, no pyvista)
+        run: pip install pytest numpy
+
+      - name: Import the plugin without the optional stack
+        run: python -c "import orca_nics_analyzer; print(orca_nics_analyzer.PLUGIN_VERSION)"
+
+      - name: Run the dependency-free tests
+        run: |
+          python -m pytest tests/test_parser.py tests/test_nics_math.py \
+            tests/test_cube_io.py tests/test_analysis.py tests/test_metadata.py \
+            -v --tb=short
+
+  # -------------------------------------------------------------------------
+  # Static check of every mw.* / context.* access against the main app's API.
   # -------------------------------------------------------------------------
   test-integration:
     runs-on: ubuntu-latest
@@ -44,26 +82,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pytest pytest-cov
+        run: pip install pytest
 
       - name: Clone main MoleditPy application
         run: |
           git clone --depth 1 \
             https://github.com/HiroYokoyama/python_molecular_editor.git \
-            ../python_molecular_editor
+            python_molecular_editor
 
-      - name: Install main app package (no heavy deps)
-        run: |
-          pip install -e ../python_molecular_editor/moleditpy \
-            --no-deps --quiet || true
-
-      - name: Run integration tests with real PluginContext
-        env:
-          CI_MAIN_APP_SRC: ${{ github.workspace }}/../python_molecular_editor/moleditpy/src
-        run: python -m pytest tests/test_plugin_integration.py tests/test_api.py -v
+      - name: Check the plugin API against the main app
+        run: python -m pytest tests/test_api.py -v --tb=short
