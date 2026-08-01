@@ -82,6 +82,7 @@ class Icss3DTab(QWidget):
         self.plugin_version = plugin_version
         self._show_in_2d = show_in_2d
         self._actors = set()
+        self._ui_ready = False
         self._build_ui()
         self._update_cache_label()
 
@@ -226,6 +227,7 @@ class Icss3DTab(QWidget):
 
         self._build_cube_ui(layout)
 
+        self._ui_ready = True
         # Initial draw
         self.draw(silent=True)
 
@@ -344,6 +346,8 @@ class Icss3DTab(QWidget):
         self._update_cache_label()
 
     def _maybe_draw(self, *_):
+        if not self._ui_ready:
+            return
         self.draw()
 
     def _auto_isovalue(self):
