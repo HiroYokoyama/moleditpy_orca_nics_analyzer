@@ -402,6 +402,11 @@ class TestExports:
         field.has_tensors = False
         assert "isotropic only" in field.summary_text()
 
+    def test_summary_includes_vector_components(self, single_out):
+        field = load_field(single_out, axis_mode="z")
+        text = field.summary_text()
+        assert "NICS_zz axis: z (0.0000, 0.0000, 1.0000)" in text
+
     def test_export_all_writes_every_artefact(self, volume_out, tmp_path):
         field = load_field(volume_out)
         written = export_all(field, str(tmp_path), "0.1.0")

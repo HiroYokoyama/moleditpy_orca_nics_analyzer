@@ -199,10 +199,6 @@ class Icss3DTab(QWidget):
         self.show_cut_axis.setChecked(False)
         self.show_cut_axis.toggled.connect(self._maybe_draw)
         s2d.addWidget(self.show_cut_axis)
-        self.show_vector = QCheckBox("Show NICS_zz vector")
-        self.show_vector.setChecked(False)
-        self.show_vector.toggled.connect(self._maybe_draw)
-        s2d.addWidget(self.show_vector)
 
         self.goto_2d_btn = QPushButton("→ 2D Map tab")
         self.goto_2d_btn.setToolTip("Switch to the 2D Map tab to view this slice.")
@@ -354,6 +350,16 @@ class Icss3DTab(QWidget):
             if peak > 0:
                 self.isovalue.setValue(max(0.05, round(peak / 10.0, 2)))
         self._sync_slider_from_spin(self.isovalue.value())
+
+    @property
+    def show_vector(self):
+        """Delegate vector checkbox queries to top header controls or local fallback."""
+        win = self.window()
+        if hasattr(win, "_vector_chk"):
+            return win._vector_chk
+        if not hasattr(self, "_fallback_vector_chk"):
+            self._fallback_vector_chk = QCheckBox()
+        return self._fallback_vector_chk
 
     # -- drawing ---------------------------------------------------------
     def _plotter(self):
@@ -536,6 +542,10 @@ class Icss3DTab(QWidget):
             show_scalar_bar=False,
         )
         self._actors.add(ACTOR_AXIS_VECTOR)
+        try:
+            plotter.render()
+        except Exception as e:
+            logging.debug("[orca_nics_analyzer] axis-vector render: %s", e)
 
     def update_cut_axis_preview(self, *_):
         """Update the arrow showing the current slice axis for 3D volumes."""

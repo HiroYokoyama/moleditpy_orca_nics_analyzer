@@ -929,6 +929,7 @@ class TestIcssTab:
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
         dialog.tabs.setCurrentWidget(dialog.icss_tab)
+        dialog.icss_tab.show_vector.setChecked(False)
         dialog.icss_tab.show_vector.setChecked(True)
         names = {
             call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list
@@ -1525,6 +1526,13 @@ class TestMap2DSliceControls:
         assert dlg.icss_tab.slice_group.title() == "Slice → 2D"
         # Verify show_cut_axis is child of slice_group
         assert dlg.icss_tab.show_cut_axis.parentWidget() is dlg.icss_tab.slice_group
+        # Verify vector checkbox is removed from 3D slice group
+        from PyQt6.QtWidgets import QCheckBox
+
+        checkbox_texts = [
+            cb.text() for cb in dlg.icss_tab.slice_group.findChildren(QCheckBox)
+        ]
+        assert "Show NICS_zz vector" not in checkbox_texts
 
 
 class TestHeaderAndVectorSettings:

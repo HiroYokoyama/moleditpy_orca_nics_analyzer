@@ -566,6 +566,13 @@ class NicsField:
 
     def summary_text(self, plugin_version="0.0.0"):
         """Human-readable header shown in the GUI and written into the report."""
+        axis_info = f"{self.axis_mode}"
+        if self.probes:
+            vec = self.axis_for(self.probes[0])
+            norm = np.linalg.norm(vec)
+            if np.isfinite(norm) and norm > 1e-12:
+                v = vec / norm
+                axis_info += f" ({v[0]:.4f}, {v[1]:.4f}, {v[2]:.4f})"
         lines = [
             f"ORCA NICS Analyzer v{plugin_version}",
             f"Source: {os.path.basename(self.filename) if self.filename else '(memory)'}",
@@ -579,7 +586,7 @@ class NicsField:
                 else ""
             ),
             f"Shielding tensors: {'yes' if self.has_tensors else 'no (isotropic only)'}",
-            f"NICS_zz axis: {self.axis_mode}",
+            f"NICS_zz axis: {axis_info}",
         ]
         for w in self.warnings:
             lines.append(f"Warning: {w}")
