@@ -739,6 +739,19 @@ class TestIcssTab:
 
         assert removed == set(ALL_ACTORS)
 
+    def test_slice_slider_and_spin_sync(self, make_dialog, volume_out):
+        dlg = make_dialog(volume_out)
+        dlg.icss_tab.slice_slider.setValue(1)
+        assert dlg.icss_tab.slice_spin.value() == 1
+        dlg.icss_tab.slice_spin.setValue(2)
+        assert dlg.icss_tab.slice_slider.value() == 2
+
+    def test_goto_2d_btn_switches_tab(self, make_dialog, volume_out):
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.icss_tab)
+        dlg.icss_tab.goto_2d_btn.click()
+        assert dlg.tabs.currentWidget() is dlg.map_tab
+
 
 # ---------------------------------------------------------------------------
 # Axis switching
@@ -1064,3 +1077,53 @@ class TestMap2DSliceControls:
         dlg.map_tab._emit_slice_to_1d()
         # scan_tab must not be poisoned with bad data.
         assert dlg.scan_tab._slice_data is None
+
+    def test_slice1d_spin_and_slider_sync(self, make_dialog, plane_out):
+        dlg = make_dialog(plane_out)
+        dlg.map_tab._slice1d_slider.setValue(1)
+        assert dlg.map_tab._slice1d_spin.value() == 1
+        dlg.map_tab._slice1d_spin.setValue(2)
+        assert dlg.map_tab._slice1d_slider.value() == 2
+
+    def test_slice1d_slider_defaults_to_center(self, make_dialog, plane_out):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        field = load_field(plane_out)
+        info = field.plane_data("iso")
+        n = len(info["a1"])
+        assert dlg.map_tab._slice1d_slider.value() == (n - 1) // 2
+
+    def test_map2d_slice1d_spin_change_triggers_refresh(self, make_dialog, plane_out):
+        from unittest.mock import MagicMock
+
+        dlg = make_dialog(plane_out)
+        dlg.map_tab.refresh = MagicMock()
+        dlg.map_tab._slice1d_spin.setValue(1)
+        assert dlg.map_tab.refresh.called
+
+    def test_icss3d_slice_spin_maximum_updates_on_stack_axis_change(
+        self, make_dialog, volume_out
+    ):
+        dlg = make_dialog(volume_out)
+        dlg.icss_tab.stack_axis_combo.setCurrentIndex(1)
+        n = dlg.icss_tab.field.plane_data("zz")["n_slices"]
+        assert dlg.icss_tab.slice_spin.maximum() == max(0, n - 1)
+
+    def test_slice_controls_visibility_single_vs_volume(
+        self, make_dialog, plane_out, volume_out
+    ):
+        dlg_plane = make_dialog(plane_out)
+        # plane_out has 1 slice in volume sense
+        assert not dlg_plane.icss_tab.slice_spin.isVisible()
+        assert not dlg_plane.icss_tab.goto_2d_btn.isVisible()
+
+        dlg_vol = make_dialog(volume_out)
+        assert dlg_vol.icss_tab.slice_spin.isVisible()
+        assert dlg_vol.icss_tab.goto_2d_btn.isVisible()
+
+    def test_show_map_tab_method(self, make_dialog, volume_out):
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.icss_tab)
+        dlg._show_map_tab()
+        assert dlg.tabs.currentWidget() is dlg.map_tab
