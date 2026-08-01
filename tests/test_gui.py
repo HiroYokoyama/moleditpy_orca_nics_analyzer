@@ -1301,6 +1301,50 @@ class TestMap2DSliceControls:
         dlg.tabs.setCurrentWidget(dlg.icss_tab)
         assert dlg.icss_tab.draw.called
 
+    def test_hidden_graphs_do_not_refresh_until_their_tab_is_active(
+        self, make_dialog, volume_out
+    ):
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.icss_tab)
+        dlg.map_tab.figure.clear()
+        dlg.map_tab.refresh()
+        assert not dlg.map_tab.figure.axes
+
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        dlg.map_tab.refresh()
+        assert dlg.map_tab.figure.axes
+
+    def test_hidden_3d_and_1d_graphs_wait_for_their_tabs(self, make_dialog, volume_out):
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+
+        original_status = dlg.icss_tab.status.text()
+        dlg.icss_tab.draw(silent=True)
+        assert dlg.icss_tab.status.text() == original_status
+
+        dlg.scan_tab.figure.clear()
+        dlg.scan_tab.refresh()
+        assert not dlg.scan_tab.figure.axes
+
+        dlg.tabs.setCurrentWidget(dlg.scan_tab)
+        dlg.scan_tab.refresh(force=True)
+        assert dlg.scan_tab.figure.axes
+
+    def test_2d_shared_controls_force_a_3d_refresh(self, make_dialog, volume_out):
+        from unittest.mock import MagicMock
+
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        dlg.icss_tab.draw = MagicMock()
+
+        dlg.map_tab.auto_range.setChecked(False)
+        assert dlg.icss_tab.draw.called
+
+        dlg.icss_tab.draw.reset_mock()
+        dlg.map_tab.component.setCurrentIndex(1)
+        assert dlg.icss_tab.component.currentIndex() == 1
+        assert dlg.icss_tab.draw.called
+
     def test_icss_slice_slider_notifies_map_tab(self, make_dialog, volume_out):
         from unittest.mock import MagicMock
 

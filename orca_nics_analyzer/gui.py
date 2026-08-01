@@ -265,7 +265,12 @@ class NicsAnalyzerDialog(QDialog):
             )
         )
 
-        self.icss_tab._on_slice_settings_changed = self.map_tab.refresh
+        self.map_tab.component.currentIndexChanged.connect(self._sync_component_to_3d)
+        self.map_tab.cmap.currentTextChanged.connect(self._refresh_3d_from_map)
+        self.map_tab.vmax.valueChanged.connect(self._refresh_3d_from_map)
+        self.map_tab.auto_range.toggled.connect(self._refresh_3d_from_map)
+
+        self.icss_tab._on_slice_settings_changed = self._refresh_map_if_visible
         self.map_tab._get_slice_index = lambda: (
             self.icss_tab.slice_slider.value()
             if hasattr(self.icss_tab, "slice_slider")
@@ -281,6 +286,14 @@ class NicsAnalyzerDialog(QDialog):
         self.summary.setReadOnly(True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
         self.tabs.addTab(self.summary, "Summary")
+
+        self.map_tab._is_tab_visible = lambda: self.tabs.currentWidget() is self.map_tab
+        self.icss_tab._is_tab_visible = lambda: (
+            self.tabs.currentWidget() is self.icss_tab
+        )
+        self.scan_tab._is_tab_visible = lambda: (
+            self.tabs.currentWidget() is self.scan_tab
+        )
 
         self._select_default_tab()
 
@@ -320,9 +333,9 @@ class NicsAnalyzerDialog(QDialog):
         # Render initial 3D surface or 2D map after molecule is in the viewer
         if self.field and self.field.is_gridded:
             if self.field.layout["kind"] == "volume":
-                self.icss_tab.draw(silent=True)
+                self.icss_tab.draw(silent=True, force=True)
             elif self.field.layout["kind"] == "plane":
-                self.map_tab.refresh()
+                self.map_tab.refresh(force=True)
 
     # -- public API ----------------------------------------------------------
 
@@ -484,28 +497,41 @@ class NicsAnalyzerDialog(QDialog):
         self.scan_tab.show_slice(data)
         self.tabs.setCurrentWidget(self.scan_tab)
 
+    def _sync_component_to_3d(self, index):
+        if self.icss_tab.component.currentIndex() != index:
+            self.icss_tab.component.setCurrentIndex(index)
+        self.icss_tab.draw(silent=True, force=True)
+
+    def _refresh_3d_from_map(self, *_):
+        """Apply shared 2D settings to the host 3D view immediately."""
+        self.icss_tab.draw(silent=True, force=True)
+
+    def _refresh_map_if_visible(self):
+        if self.tabs.currentWidget() is self.map_tab:
+            self.map_tab.refresh(force=True)
+
     def _show_map_tab(self):
         """Switch to the 2D Map tab."""
         if hasattr(self, "map_tab"):
-            self.map_tab.refresh()
+            self.map_tab.refresh(force=True)
         self.tabs.setCurrentWidget(self.map_tab)
 
     def _on_tab_changed(self, index):
         widget = self.tabs.widget(index)
         if hasattr(self, "icss_tab") and widget is self.icss_tab:
-            self.icss_tab.draw(silent=True)
+            self.icss_tab.draw(silent=True, force=True)
         elif hasattr(self, "map_tab") and widget is self.map_tab:
-            self.map_tab.refresh()
-
-    # -- actions -------------------------------------------------------------
+            self.map_tab.refresh(force=True)
+        elif hasattr(self, "scan_tab") and widget is self.scan_tab:
+            self.scan_tab.refresh(force=True)
 
     def _on_axis_changed(self):
         if self.field is None:
             return
         self.field.set_axis_mode(self.axis_combo.currentData())
         self.probe_tab.refresh()
-        self.scan_tab.refresh()
-        self.map_tab.refresh()
+        self.scan_tab.refresh(force=self.tabs.currentWidget() is self.scan_tab)
+        self.map_tab.refresh(force=self.tabs.currentWidget() is self.map_tab)
         self.icss_tab._update_cache_label()
         self.icss_tab.draw(silent=True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))

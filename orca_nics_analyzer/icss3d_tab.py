@@ -81,6 +81,7 @@ class Icss3DTab(QWidget):
         self._plotter_getter = plotter_getter
         self.plugin_version = plugin_version
         self._show_in_2d = show_in_2d
+        self._is_tab_visible = lambda: True
         self._actors = set()
         self._ui_ready = False
         self._build_ui()
@@ -228,7 +229,7 @@ class Icss3DTab(QWidget):
 
         self._ui_ready = True
         # Initial draw
-        self.draw(silent=True)
+        self.draw(silent=True, force=True)
 
     def _on_auto_toggled(self, checked):
         self.vmax.setEnabled(not checked)
@@ -393,7 +394,9 @@ class Icss3DTab(QWidget):
         except Exception:
             return "#3c6ec8", "#c8463c"
 
-    def draw(self, silent=False):
+    def draw(self, silent=False, force=False):
+        if not force and not self._is_tab_visible():
+            return
         if pv is None:
             if not silent:
                 QMessageBox.information(

@@ -44,13 +44,14 @@ class Scan1DTab(QWidget):
     def __init__(self, field, parent=None):
         super().__init__(parent)
         self.field = field
+        self._is_tab_visible = lambda: True
         self.canvas = None
         self.figure = None
         # When not None, this externally-supplied data dict overrides
         # the native field.line_data() call.
         self._slice_data = None
         self._build_ui()
-        self.refresh()
+        self.refresh(force=True)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -132,18 +133,20 @@ class Scan1DTab(QWidget):
         self._slice_data = data
         if self._clear_slice_btn is not None:
             self._clear_slice_btn.setVisible(True)
-        self.refresh()
+        self.refresh(force=True)
 
     def clear_slice(self):
         """Return to the native probe-layout scan view."""
         self._slice_data = None
         if self._clear_slice_btn is not None:
             self._clear_slice_btn.setVisible(False)
-        self.refresh()
+        self.refresh(force=True)
 
     # -- drawing ---------------------------------------------------------
 
-    def refresh(self):
+    def refresh(self, force=False):
+        if not force and not self._is_tab_visible():
+            return
         if self.canvas is None:
             return
         self.figure.clear()

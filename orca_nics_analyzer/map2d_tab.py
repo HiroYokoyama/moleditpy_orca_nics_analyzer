@@ -58,10 +58,11 @@ class Map2DTab(QWidget):
         self.field = field
         self._show_in_3d = show_in_3d
         self._show_slice_in_1d = show_slice_in_1d
+        self._is_tab_visible = lambda: True
         self.canvas = None
         self.figure = None
         self._build_ui()
-        self.refresh()
+        self.refresh(force=True)
 
     # -- ui --------------------------------------------------------------
     def _build_ui(self):
@@ -255,7 +256,9 @@ class Map2DTab(QWidget):
         return self.component.currentData() if hasattr(self, "component") else "zz"
 
     # -- drawing ---------------------------------------------------------
-    def refresh(self):
+    def refresh(self, force=False):
+        if not force and not self._is_tab_visible():
+            return
         if self.canvas is None:
             return
         self.figure.clear()
