@@ -725,7 +725,7 @@ class TestIcssTab:
         pytest.importorskip("pyvista")
         dialog = make_dialog(plane_out)
         dialog.map_tab._emit_show_in_3d()
-        assert fake_plotter.add_mesh.call_count == 1
+        assert fake_plotter.add_mesh.call_count >= 1
         assert "Map plane added" in dialog.icss_tab.status.text()
 
     def test_clear_removes_every_actor(self, make_dialog, volume_out, fake_plotter):

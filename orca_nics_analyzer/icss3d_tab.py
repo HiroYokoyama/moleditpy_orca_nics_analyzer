@@ -103,6 +103,7 @@ class Icss3DTab(QWidget):
             self.component.setCurrentIndex(1)
             self.component.setEnabled(False)
         self.component.currentIndexChanged.connect(self._on_component_changed)
+        self.component.currentIndexChanged.connect(self._maybe_draw)
         grid.addWidget(self.component, 0, 1)
 
         grid.addWidget(QLabel("Isovalue / ppm:"), 0, 2)
@@ -112,6 +113,7 @@ class Icss3DTab(QWidget):
         self.isovalue.setSingleStep(0.5)
         self.isovalue.setValue(5.0)
         self.isovalue.valueChanged.connect(self._sync_slider_from_spin)
+        self.isovalue.valueChanged.connect(self._maybe_draw)
         grid.addWidget(self.isovalue, 0, 3)
 
         self.iso_slider = QSlider(Qt.Orientation.Horizontal)
@@ -124,14 +126,17 @@ class Icss3DTab(QWidget):
         self.opacity.setRange(0.05, 1.0)
         self.opacity.setSingleStep(0.05)
         self.opacity.setValue(0.55)
+        self.opacity.valueChanged.connect(self._maybe_draw)
         grid.addWidget(self.opacity, 2, 1)
 
         self.show_positive = QCheckBox("Paratropic (+)")
         self.show_positive.setChecked(True)
+        self.show_positive.toggled.connect(self._maybe_draw)
         grid.addWidget(self.show_positive, 2, 2)
 
         self.show_negative = QCheckBox("Diatropic (-)")
         self.show_negative.setChecked(True)
+        self.show_negative.toggled.connect(self._maybe_draw)
         grid.addWidget(self.show_negative, 2, 3)
 
         self.show_cut_axis = QCheckBox("Cut axis preview")
@@ -184,9 +189,10 @@ class Icss3DTab(QWidget):
         layout.addWidget(controls)
 
         row = QHBoxLayout()
-        draw = QPushButton("Draw isosurfaces")
+        draw = QPushButton("Refresh")
         draw.clicked.connect(self.draw)
         row.addWidget(draw)
+
         clear = QPushButton("Clear from 3D view")
         clear.clicked.connect(self.clear_actors)
         row.addWidget(clear)
@@ -277,6 +283,9 @@ class Icss3DTab(QWidget):
     def _on_component_changed(self):
         self._auto_isovalue()
         self._update_cache_label()
+
+    def _maybe_draw(self, *_):
+        self.draw()
 
     def _auto_isovalue(self):
         """A tenth of the peak magnitude usually frames the ring-current lobes."""
