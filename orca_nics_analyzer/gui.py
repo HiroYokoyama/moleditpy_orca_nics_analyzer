@@ -216,6 +216,28 @@ class NicsAnalyzerDialog(QDialog):
         self.tabs.addTab(self.map_tab, "2D Map")
         self.tabs.addTab(self.icss_tab, "3D ICSS")
 
+        # Sync color mapping settings between the two tabs
+        self.map_tab.cmap.currentTextChanged.connect(
+            lambda t: self.icss_tab.cmap.setCurrentText(t) if self.icss_tab.cmap.currentText() != t else None
+        )
+        self.icss_tab.cmap.currentTextChanged.connect(
+            lambda t: self.map_tab.cmap.setCurrentText(t) if self.map_tab.cmap.currentText() != t else None
+        )
+        
+        self.map_tab.vmax.valueChanged.connect(
+            lambda v: self.icss_tab.vmax.setValue(v) if self.icss_tab.vmax.value() != v else None
+        )
+        self.icss_tab.vmax.valueChanged.connect(
+            lambda v: self.map_tab.vmax.setValue(v) if self.map_tab.vmax.value() != v else None
+        )
+        
+        self.map_tab.auto_range.toggled.connect(
+            lambda c: self.icss_tab.auto_range.setChecked(c) if self.icss_tab.auto_range.isChecked() != c else None
+        )
+        self.icss_tab.auto_range.toggled.connect(
+            lambda c: self.map_tab.auto_range.setChecked(c) if self.map_tab.auto_range.isChecked() != c else None
+        )
+
         self.summary = QTextEdit()
         self.summary.setReadOnly(True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
@@ -331,6 +353,9 @@ class NicsAnalyzerDialog(QDialog):
         try:
             self._loading_structure = True
             self.context.show_xyz_data(xyz, source_name=name, skip_chemistry=include_probes)
+            plotter = self._plotter()
+            if plotter is not None:
+                plotter.reset_camera()
         except Exception as e:  # noqa: BLE001
             logging.warning("[orca_nics_analyzer] show_xyz_data: %s", e)
         finally:

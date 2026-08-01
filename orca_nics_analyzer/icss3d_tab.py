@@ -28,6 +28,7 @@ except ImportError:  # pyvista is an optional dependency
     pv = None
 
 from . import cube_io
+from .map2d_tab import COLORMAPS
 
 #: Actor names, so a redraw replaces its own actors and nothing else.
 ACTOR_POSITIVE = "nics_icss_positive"
@@ -132,6 +133,27 @@ class Icss3DTab(QWidget):
         self.show_negative.setChecked(True)
         grid.addWidget(self.show_negative, 2, 3)
 
+        grid.addWidget(QLabel("Colormap:"), 3, 0)
+        self.cmap = QComboBox()
+        self.cmap.addItems(COLORMAPS)
+        self.cmap.currentIndexChanged.connect(self.draw)
+        grid.addWidget(self.cmap, 3, 1)
+
+        grid.addWidget(QLabel("Range +/- ppm:"), 4, 0)
+        self.vmax = QDoubleSpinBox()
+        self.vmax.setRange(0.1, 1000.0)
+        self.vmax.setDecimals(2)
+        self.vmax.setSingleStep(1.0)
+        self.vmax.setValue(10.0)
+        self.vmax.setEnabled(False)
+        self.vmax.valueChanged.connect(self.draw)
+        grid.addWidget(self.vmax, 4, 1)
+
+        self.auto_range = QCheckBox("Auto")
+        self.auto_range.setChecked(True)
+        self.auto_range.toggled.connect(self._on_auto_toggled)
+        grid.addWidget(self.auto_range, 4, 2)
+
         layout.addWidget(controls)
 
         row = QHBoxLayout()
@@ -143,7 +165,13 @@ class Icss3DTab(QWidget):
         row.addWidget(clear)
         row.addStretch(1)
         layout.addLayout(row)
+        
+        self._build_cube_ui(layout)
 
+    def _on_auto_toggled(self, checked):
+        self.vmax.setEnabled(not checked)
+
+    def _build_cube_ui(self, layout):
         cube_group = QGroupBox("Cube file")
         cube_layout = QVBoxLayout(cube_group)
         self.cache_label = QLabel()
@@ -204,14 +232,10 @@ class Icss3DTab(QWidget):
             return None
 
     def _cmap_and_span(self):
-        try:
-            map_tab = self.parent().map_tab
-            cmap = map_tab.cmap.currentText()
-            span = map_tab.vmax.value()
-            auto = map_tab.auto_range.isChecked()
-            return cmap, span, auto
-        except AttributeError:
-            return "seismic", 10.0, True
+        cmap = self.cmap.currentText()
+        span = self.vmax.value()
+        auto = self.auto_range.isChecked()
+        return cmap, span, auto
 
     def _isosurface_colors(self):
         cmap_name, _, _ = self._cmap_and_span()
