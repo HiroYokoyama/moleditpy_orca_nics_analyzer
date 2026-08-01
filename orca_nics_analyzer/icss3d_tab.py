@@ -82,6 +82,8 @@ class Icss3DTab(QWidget):
         self.plugin_version = plugin_version
         self._show_in_2d = show_in_2d
         self._is_tab_visible = lambda: True
+        self._display_span = 10.0
+        self._auto_display_range = True
         self._actors = set()
         self._ui_ready = False
         self._build_ui()
@@ -156,22 +158,6 @@ class Icss3DTab(QWidget):
         self.cmap.currentIndexChanged.connect(self.draw)
         grid.addWidget(self.cmap, 3, 1)
 
-        grid.addWidget(QLabel("Range +/- ppm:"), 3, 2)
-        self.vmax = QDoubleSpinBox()
-        self.vmax.setRange(0.1, 1000.0)
-        self.vmax.setDecimals(2)
-        self.vmax.setSingleStep(1.0)
-        self.vmax.setValue(10.0)
-        self.vmax.setEnabled(False)
-        self.vmax.valueChanged.connect(self.draw)
-        grid.addWidget(self.vmax, 3, 3)
-
-        self.auto_range = QCheckBox("Auto")
-        self.auto_range.setChecked(True)
-        self.auto_range.toggled.connect(self._on_auto_toggled)
-        # Keep Auto in its own row so it cannot overlap the range control.
-        grid.addWidget(self.auto_range, 4, 3)
-
         layout.addWidget(controls)
 
         # ---- Slice → 2D GroupBox ----
@@ -230,10 +216,6 @@ class Icss3DTab(QWidget):
         self._ui_ready = True
         # Initial draw
         self.draw(silent=True, force=True)
-
-    def _on_auto_toggled(self, checked):
-        self.vmax.setEnabled(not checked)
-        self._maybe_draw()
 
     def _configure_slices(self):
         if not self.field.is_gridded:
@@ -370,9 +352,17 @@ class Icss3DTab(QWidget):
 
     def _cmap_and_span(self):
         cmap = self.cmap.currentText()
-        span = self.vmax.value()
-        auto = self.auto_range.isChecked()
+        span = self._display_span
+        auto = self._auto_display_range
         return cmap, span, auto
+
+    def set_display_range(self, value):
+        """Set the shared map range used by compatibility plane rendering."""
+        self._display_span = float(value)
+
+    def set_auto_display_range(self, checked):
+        """Set whether compatibility plane rendering uses an automatic range."""
+        self._auto_display_range = bool(checked)
 
     def _isosurface_colors(self):
         cmap_name, _, _ = self._cmap_and_span()

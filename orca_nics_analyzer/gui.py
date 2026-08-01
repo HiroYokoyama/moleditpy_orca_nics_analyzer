@@ -235,35 +235,8 @@ class NicsAnalyzerDialog(QDialog):
             )
         )
 
-        self.map_tab.vmax.valueChanged.connect(
-            lambda v: (
-                self.icss_tab.vmax.setValue(v)
-                if self.icss_tab.vmax.value() != v
-                else None
-            )
-        )
-        self.icss_tab.vmax.valueChanged.connect(
-            lambda v: (
-                self.map_tab.vmax.setValue(v)
-                if self.map_tab.vmax.value() != v
-                else None
-            )
-        )
-
-        self.map_tab.auto_range.toggled.connect(
-            lambda c: (
-                self.icss_tab.auto_range.setChecked(c)
-                if self.icss_tab.auto_range.isChecked() != c
-                else None
-            )
-        )
-        self.icss_tab.auto_range.toggled.connect(
-            lambda c: (
-                self.map_tab.auto_range.setChecked(c)
-                if self.map_tab.auto_range.isChecked() != c
-                else None
-            )
-        )
+        self.map_tab.vmax.valueChanged.connect(self._set_3d_display_range)
+        self.map_tab.auto_range.toggled.connect(self._set_3d_auto_display_range)
 
         self.map_tab.component.currentIndexChanged.connect(self._sync_component_to_3d)
         self.map_tab.cmap.currentTextChanged.connect(self._refresh_3d_from_map)
@@ -500,11 +473,23 @@ class NicsAnalyzerDialog(QDialog):
     def _sync_component_to_3d(self, index):
         if self.icss_tab.component.currentIndex() != index:
             self.icss_tab.component.setCurrentIndex(index)
-        self.icss_tab.draw(silent=True, force=True)
+        self.icss_tab.draw(
+            silent=True, force=self.tabs.currentWidget() is self.icss_tab
+        )
+
+    def _set_3d_display_range(self, value):
+        self.icss_tab.set_display_range(value)
+        self._refresh_3d_from_map()
+
+    def _set_3d_auto_display_range(self, checked):
+        self.icss_tab.set_auto_display_range(checked)
+        self._refresh_3d_from_map()
 
     def _refresh_3d_from_map(self, *_):
-        """Apply shared 2D settings to the host 3D view immediately."""
-        self.icss_tab.draw(silent=True, force=True)
+        """Apply shared 2D settings when the 3D tab is visible."""
+        self.icss_tab.draw(
+            silent=True, force=self.tabs.currentWidget() is self.icss_tab
+        )
 
     def _refresh_map_if_visible(self):
         if self.tabs.currentWidget() is self.map_tab:
@@ -518,7 +503,12 @@ class NicsAnalyzerDialog(QDialog):
 
     def _on_tab_changed(self, index):
         widget = self.tabs.widget(index)
-        if hasattr(self, "icss_tab") and widget is self.icss_tab:
+        if not hasattr(self, "icss_tab"):
+            return
+
+        # Each tab owns its graphics; clear stale plugin actors before switching.
+        self.icss_tab.clear_actors()
+        if widget is self.icss_tab:
             self.icss_tab.draw(silent=True, force=True)
         elif hasattr(self, "map_tab") and widget is self.map_tab:
             self.map_tab.refresh(force=True)

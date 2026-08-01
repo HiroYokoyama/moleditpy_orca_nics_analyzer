@@ -9,6 +9,7 @@ np = pytest.importorskip("numpy")
 pytest.importorskip("PyQt6.QtWidgets")
 
 from PyQt6.QtCore import QMimeData, QUrl  # noqa: E402
+from PyQt6.QtWidgets import QPushButton  # noqa: E402
 
 from orca_nics_analyzer.parser import NicsParser  # noqa: E402
 from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block  # noqa: E402
@@ -583,8 +584,8 @@ class TestMapTab:
         dialog = make_dialog(plane_out)
         assert dialog.map_tab.figure.axes
 
-    def test_range_and_auto_controls_use_distinct_cells(
-        self, make_dialog, plane_out, volume_out
+    def test_map_range_and_auto_controls_use_distinct_cells(
+        self, make_dialog, plane_out
     ):
         dialog = make_dialog(plane_out)
         map_layout = dialog.map_tab.auto_range.parentWidget().layout()
@@ -593,16 +594,6 @@ class TestMapTab:
         )
         map_vmax = map_layout.getItemPosition(map_layout.indexOf(dialog.map_tab.vmax))
         assert map_auto[:2] != map_vmax[:2]
-
-        dialog = make_dialog(volume_out)
-        icss_layout = dialog.icss_tab.auto_range.parentWidget().layout()
-        icss_auto = icss_layout.getItemPosition(
-            icss_layout.indexOf(dialog.icss_tab.auto_range)
-        )
-        icss_vmax = icss_layout.getItemPosition(
-            icss_layout.indexOf(dialog.icss_tab.vmax)
-        )
-        assert icss_auto[:2] != icss_vmax[:2]
 
     def test_map_axes_are_centered_with_a_data_limit_aspect(
         self, make_dialog, plane_out
@@ -768,27 +759,24 @@ class TestIcssTab:
 
         assert tab.draw.call_count >= 4
 
-    def test_cmap_and_span_uses_tab_controls(self, make_dialog, volume_out):
+    def test_cmap_and_span_uses_internal_compatibility_state(
+        self, make_dialog, volume_out
+    ):
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
         dialog.icss_tab.cmap.setCurrentText("RdBu_r")
-        dialog.icss_tab.vmax.setValue(15.5)
-        dialog.icss_tab.auto_range.setChecked(False)
+        dialog.icss_tab.set_display_range(15.5)
+        dialog.icss_tab.set_auto_display_range(False)
 
         cmap, span, auto = dialog.icss_tab._cmap_and_span()
         assert cmap == "RdBu_r"
         assert span == 15.5
         assert not auto
 
-    def test_vmax_disabled_when_auto(self, make_dialog, volume_out):
-        pytest.importorskip("pyvista")
+    def test_3d_tab_does_not_expose_map_range_controls(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
-
-        dialog.icss_tab.auto_range.setChecked(True)
-        assert not dialog.icss_tab.vmax.isEnabled()
-
-        dialog.icss_tab.auto_range.setChecked(False)
-        assert dialog.icss_tab.vmax.isEnabled()
+        assert not hasattr(dialog.icss_tab, "vmax")
+        assert not hasattr(dialog.icss_tab, "auto_range")
 
     def test_auto_isovalue_is_positive(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
@@ -872,12 +860,27 @@ class TestIcssTab:
         make_dialog(plane_out)
         assert fake_plotter.add_mesh.call_count == 0
 
-    def test_show_plane_in_3d(self, make_dialog, plane_out, fake_plotter):
-        pytest.importorskip("pyvista")
+    def test_2d_tab_has_no_3d_plane_button(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
-        dialog.map_tab._emit_show_in_3d()
-        assert fake_plotter.add_mesh.call_count >= 1
-        assert "Map plane added" in dialog.icss_tab.status.text()
+        assert not any(
+            button.text() == "Show in 3D view"
+            for button in dialog.map_tab.findChildren(QPushButton)
+        )
+
+    def test_switching_to_2d_clears_3d_actors(
+        self, make_dialog, volume_out, fake_plotter
+    ):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.tabs.setCurrentWidget(dialog.icss_tab)
+        fake_plotter.reset_mock()
+
+        dialog.tabs.setCurrentWidget(dialog.map_tab)
+
+        removed = {call.args[0] for call in fake_plotter.remove_actor.call_args_list}
+        from orca_nics_analyzer.icss3d_tab import ALL_ACTORS
+
+        assert removed == set(ALL_ACTORS)
 
     def test_clear_removes_every_actor(self, make_dialog, volume_out, fake_plotter):
         pytest.importorskip("pyvista")
@@ -921,26 +924,16 @@ class TestTabSync:
         dlg.icss_tab.cmap.setCurrentText("coolwarm")
         assert dlg.map_tab.cmap.currentText() == "coolwarm"
 
-    def test_vmax_syncs_bidirectionally(self, make_dialog, volume_out):
+    def test_map_range_updates_3d_compatibility_state(self, make_dialog, volume_out):
         dlg = make_dialog(volume_out)
 
-        # Turn off auto range so it doesn't immediately overwrite our manual values
         dlg.map_tab.auto_range.setChecked(False)
-
         dlg.map_tab.vmax.setValue(42.0)
-        assert dlg.icss_tab.vmax.value() == 42.0
+        assert dlg.icss_tab._display_span == 42.0
+        assert not dlg.icss_tab._auto_display_range
 
-        dlg.icss_tab.vmax.setValue(17.5)
-        assert dlg.map_tab.vmax.value() == 17.5
-
-    def test_auto_range_syncs_bidirectionally(self, make_dialog, volume_out):
-        dlg = make_dialog(volume_out)
-
-        dlg.map_tab.auto_range.setChecked(False)
-        assert not dlg.icss_tab.auto_range.isChecked()
-
-        dlg.icss_tab.auto_range.setChecked(True)
-        assert dlg.map_tab.auto_range.isChecked()
+        dlg.map_tab.auto_range.setChecked(True)
+        assert dlg.icss_tab._auto_display_range
 
     def test_stack_axis_syncs_to_3d_viewer(self, make_dialog, volume_out, fake_plotter):
         pytest.importorskip("pyvista")

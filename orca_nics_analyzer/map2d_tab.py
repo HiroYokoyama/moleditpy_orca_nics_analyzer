@@ -188,13 +188,6 @@ class Map2DTab(QWidget):
         # ---- bottom buttons --------------------------------------------
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        if self._show_in_3d is not None:
-            btn3d = QPushButton("Show in 3D view")
-            btn3d.setToolTip(
-                "Drop this plane into the main 3D viewer next to the molecule."
-            )
-            btn3d.clicked.connect(self._emit_show_in_3d)
-            buttons.addWidget(btn3d)
         csv_btn = QPushButton("Export grid CSV...")
         csv_btn.clicked.connect(self.export_csv)
         buttons.addWidget(csv_btn)
