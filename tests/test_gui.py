@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import QPushButton  # noqa: E402
 
 from orca_nics_analyzer.parser import NicsParser  # noqa: E402
 from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block  # noqa: E402
+from orca_nics_analyzer.icss3d_tab import ACTOR_NEGATIVE, ACTOR_POSITIVE  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("qapp", "no_modals")
 
@@ -914,7 +915,11 @@ class TestIcssTab:
     ):
         pytest.importorskip("pyvista")
         make_dialog(plane_out)
-        assert fake_plotter.add_mesh.call_count == 0
+        names = {
+            call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list
+        }
+        assert ACTOR_POSITIVE not in names
+        assert ACTOR_NEGATIVE not in names
 
     def test_2d_tab_offers_3d_plane_button(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
@@ -1056,6 +1061,17 @@ class TestAxisSwitching:
         dialog.icss_tab.draw = MagicMock()
         dialog.axis_combo.setCurrentIndex(2)
         dialog.icss_tab.draw.assert_called_once_with(silent=True)
+
+    def test_manual_axis_change_refreshes_visible_2d_plane(
+        self, make_dialog, plane_out
+    ):
+        from unittest.mock import MagicMock
+
+        dialog = make_dialog(plane_out)
+        dialog.tabs.setCurrentWidget(dialog.map_tab)
+        dialog.icss_tab.show_plane = MagicMock()
+        dialog.axis_combo.setCurrentIndex(2)
+        dialog.icss_tab.show_plane.assert_called()
 
     def test_axis_is_disabled_without_tensors(
         self, make_dialog, single_out, monkeypatch
@@ -1389,6 +1405,25 @@ class TestMap2DSliceControls:
 
         dlg.tabs.setCurrentWidget(dlg.icss_tab)
         assert dlg.icss_tab.draw.called
+
+    def test_map_tab_auto_shows_current_plane_in_3d(self, make_dialog, volume_out):
+        from unittest.mock import MagicMock
+
+        dlg = make_dialog(volume_out)
+        dlg.icss_tab.show_plane = MagicMock()
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        dlg.icss_tab.show_plane.assert_called_with(
+            dlg.map_tab.component.currentData(), dlg.icss_tab.slice_slider.value()
+        )
+
+    def test_map_changes_refresh_the_automatic_3d_plane(self, make_dialog, volume_out):
+        from unittest.mock import MagicMock
+
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        dlg.icss_tab.show_plane = MagicMock()
+        dlg.map_tab.component.setCurrentIndex(1)
+        assert dlg.icss_tab.show_plane.called
 
     def test_hidden_graphs_do_not_refresh_until_their_tab_is_active(
         self, make_dialog, volume_out

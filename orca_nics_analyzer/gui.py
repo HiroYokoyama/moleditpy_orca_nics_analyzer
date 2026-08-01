@@ -245,6 +245,14 @@ class NicsAnalyzerDialog(QDialog):
         self.map_tab.cmap.currentTextChanged.connect(self._refresh_3d_from_map)
         self.map_tab.vmax.valueChanged.connect(self._refresh_3d_from_map)
         self.map_tab.auto_range.toggled.connect(self._refresh_3d_from_map)
+        self.map_tab.component.currentIndexChanged.connect(
+            self._refresh_3d_plane_if_map_visible
+        )
+        self.map_tab.cmap.currentTextChanged.connect(
+            self._refresh_3d_plane_if_map_visible
+        )
+        self.map_tab.vmax.valueChanged.connect(self._refresh_3d_plane_if_map_visible)
+        self.map_tab.auto_range.toggled.connect(self._refresh_3d_plane_if_map_visible)
 
         self.icss_tab._on_slice_settings_changed = self._refresh_map_if_visible
         self.map_tab._get_slice_index = lambda: (
@@ -313,6 +321,7 @@ class NicsAnalyzerDialog(QDialog):
                 self.icss_tab.draw(silent=True, force=True)
             elif self.field.layout["kind"] == "plane":
                 self.map_tab.refresh(force=True)
+        self._refresh_3d_plane_if_map_visible()
 
     # -- public API ----------------------------------------------------------
 
@@ -565,6 +574,21 @@ class NicsAnalyzerDialog(QDialog):
     def _refresh_map_if_visible(self):
         if self.tabs.currentWidget() is self.map_tab:
             self.map_tab.refresh(force=True)
+            self._refresh_3d_plane_if_map_visible()
+
+    def _refresh_3d_plane_if_map_visible(self, *_):
+        """Mirror the visible 2D slice as a temporary host-3D plane."""
+        if self.tabs.currentWidget() is not self.map_tab:
+            return
+        if not self.field or not self.field.is_gridded:
+            return
+        try:
+            self.icss_tab.show_plane(
+                self.map_tab.component.currentData(),
+                self.map_tab._get_slice_index(),
+            )
+        except (ValueError, RuntimeError) as exc:
+            logging.debug("[orca_nics_analyzer] auto 2D plane: %s", exc)
 
     def _show_map_tab(self):
         """Switch to the 2D Map tab."""
@@ -583,6 +607,7 @@ class NicsAnalyzerDialog(QDialog):
             self.icss_tab.draw(silent=True, force=True)
         elif hasattr(self, "map_tab") and widget is self.map_tab:
             self.map_tab.refresh(force=True)
+            self._refresh_3d_plane_if_map_visible()
         elif hasattr(self, "scan_tab") and widget is self.scan_tab:
             self.scan_tab.refresh(force=True)
 
@@ -592,7 +617,7 @@ class NicsAnalyzerDialog(QDialog):
         self.field.set_axis_mode(self.axis_combo.currentData())
         self.probe_tab.refresh()
         self.scan_tab.refresh(force=self.tabs.currentWidget() is self.scan_tab)
-        self.map_tab.refresh(force=self.tabs.currentWidget() is self.map_tab)
+        self._refresh_map_if_visible()
         self.icss_tab._update_cache_label()
         self.icss_tab.draw(silent=True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
