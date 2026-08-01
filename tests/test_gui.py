@@ -1122,8 +1122,32 @@ class TestMap2DSliceControls:
         assert not dlg_vol.icss_tab.slice_spin.isHidden()
         assert not dlg_vol.icss_tab.goto_2d_btn.isHidden()
 
-    def test_show_map_tab_method(self, make_dialog, volume_out):
+    def test_show_map_tab_refreshes_map(self, make_dialog, volume_out):
+        from unittest.mock import MagicMock
+
         dlg = make_dialog(volume_out)
-        dlg.tabs.setCurrentWidget(dlg.icss_tab)
+        dlg.map_tab.refresh = MagicMock()
         dlg._show_map_tab()
         assert dlg.tabs.currentWidget() is dlg.map_tab
+        assert dlg.map_tab.refresh.called
+
+    def test_tab_changed_signal_triggers_refresh(self, make_dialog, volume_out):
+        from unittest.mock import MagicMock
+
+        dlg = make_dialog(volume_out)
+        dlg.map_tab.refresh = MagicMock()
+        dlg.icss_tab.draw = MagicMock()
+
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        assert dlg.map_tab.refresh.called
+
+        dlg.tabs.setCurrentWidget(dlg.icss_tab)
+        assert dlg.icss_tab.draw.called
+
+    def test_icss_slice_slider_notifies_map_tab(self, make_dialog, volume_out):
+        from unittest.mock import MagicMock
+
+        dlg = make_dialog(volume_out)
+        dlg.map_tab.refresh = MagicMock()
+        dlg.icss_tab.slice_slider.setValue(2)
+        assert dlg.map_tab.refresh.called
