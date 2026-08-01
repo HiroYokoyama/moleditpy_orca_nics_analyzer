@@ -655,6 +655,33 @@ class TestMapTab:
         assert len(lines) == 10  # header + 9 rows
         assert lines[0].startswith("axis2\\axis1")
 
+    def test_show_in_3d_errors_are_reported(self, make_dialog, plane_out, no_modals):
+        dialog = make_dialog(plane_out)
+
+        def fail(*args):
+            raise RuntimeError("overlay failed")
+
+        dialog.map_tab._show_in_3d = fail
+        dialog.map_tab._emit_show_in_3d()
+        assert any("overlay failed" in message for _, message in no_modals)
+
+    def test_slice_to_1d_without_receiver_shows_message(
+        self, make_dialog, plane_out, no_modals
+    ):
+        dialog = make_dialog(plane_out)
+        dialog.map_tab._show_slice_in_1d = None
+        dialog.map_tab._emit_slice_to_1d()
+        assert any("No 1D scan tab" in message for _, message in no_modals)
+
+    def test_export_cancelled_does_nothing(self, make_dialog, plane_out):
+        dialog = make_dialog(plane_out)
+        with patch(
+            "orca_nics_analyzer.map2d_tab.QFileDialog.getSaveFileName",
+            return_value=("", ""),
+        ):
+            dialog.map_tab.export_csv()
+            dialog.map_tab.export_png()
+
     def test_export_png(self, make_dialog, plane_out, tmp_path):
         dialog = make_dialog(plane_out)
         target = str(tmp_path / "map.png")
@@ -683,6 +710,23 @@ class TestIcssTab:
         )
         assert grid.dimensions == (2, 3, 4)
         assert grid.n_points == 24
+
+    def test_plotter_getter_errors_are_handled(self, make_dialog, volume_out):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+
+        def fail():
+            raise RuntimeError("plotter closed")
+
+        dialog.icss_tab._plotter_getter = fail
+        assert dialog.icss_tab._plotter() is None
+
+    def test_non_volume_draw_reports_layout(self, make_dialog, plane_out, no_modals):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(plane_out)
+        dialog.tabs.setCurrentWidget(dialog.icss_tab)
+        dialog.icss_tab.draw()
+        assert any("Isosurfaces need" in message for _, message in no_modals)
 
     def test_missing_plotter_is_handled(self, make_dialog, volume_out):
         pytest.importorskip("pyvista")
