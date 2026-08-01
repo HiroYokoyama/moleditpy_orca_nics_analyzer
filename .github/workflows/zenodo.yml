@@ -1,11 +1,14 @@
 name: Zenodo Production Upload
 
 on:
-  # Manual only, on purpose. Archiving is not wired up for this repo yet: no
-  # Zenodo record exists, so DEPOSITION_ID in scripts/update_zenodo.py is
-  # empty and a run would fail. Add the `release: types: [published]` trigger
-  # back once a record exists and its ID is filled in — the script refuses a
-  # version identical to the record's current one, so repeats are safe then.
+  # Publishing a GitHub release archives it automatically. Re-running is safe:
+  # update_zenodo.py refuses a version identical to the record's current one,
+  # so a repeat cannot mint a duplicate DOI.
+  #
+  # This assumes the GitHub<->Zenodo webhook for this repo is OFF. With both
+  # enabled, every release is archived twice and mints two DOIs.
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:

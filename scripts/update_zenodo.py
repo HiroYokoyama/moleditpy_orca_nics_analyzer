@@ -25,16 +25,14 @@ def parse_pyproject_version(filepath="moleditpy/pyproject.toml"):
     return None
 
 
-#: Zenodo record this plugin's versions belong to. No record exists yet, so
-#: this is deliberately empty: a stale ID copied from another plugin would
-#: publish this package as a new *version of that plugin's record*.
-#:
-#: To enable archiving: create the first Zenodo record for this repo, then put
-#: its concrete latest-record ID here (not the concept DOI from the badge —
-#: the API POSTs to /api/records/{id}/versions and urllib turns the concept
-#: redirect into a GET). Resolve it with:
-#:     curl -sL https://zenodo.org/api/records/<concept-id> | jq .id
-DEPOSITION_ID = ""
+#: Zenodo record for "MoleditPy ORCA NICS Analyzer":
+#: https://zenodo.org/records/21731441
+#: This is the concrete latest-version record, NOT the concept DOI in the
+#: README badge (10.5281/zenodo.21731440) — the API POSTs to
+#: /api/records/{id}/versions and urllib turns the concept redirect into a
+#: GET. Zenodo versions the whole record family from any published version,
+#: so this stays correct across releases and is the only ID here.
+DEPOSITION_ID = "21731441"
 
 
 def make_request(url, data=None, headers=None, method="GET", json_response=True):
