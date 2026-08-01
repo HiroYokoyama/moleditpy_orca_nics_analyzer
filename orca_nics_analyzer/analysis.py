@@ -97,7 +97,9 @@ class NicsField:
     @property
     def grid_normal(self):
         """Normal of the probe plane/slab, or None when the probes are not planar."""
-        if self.layout["kind"] in ("plane", "volume", "line"):
+        if self.layout["kind"] == "line":
+            return self.layout["axes"][0]
+        if self.layout["kind"] in ("plane", "volume"):
             return self.layout["axes"][self.stack_axis_index()]
         return None
 
