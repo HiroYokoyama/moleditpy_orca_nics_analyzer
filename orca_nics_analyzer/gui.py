@@ -298,11 +298,19 @@ class NicsAnalyzerDialog(QDialog):
             )
 
         self._build_tabs()
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         self._stack.setCurrentIndex(1)
         self.status.setText(self._layout_hint())
 
         # Load the molecule into the host's 3D viewer.
         self._load_molecule(include_probes=self._probe_chk.isChecked())
+
+        # Render initial 3D surface or 2D map after molecule is in the viewer
+        if self.field and self.field.is_gridded:
+            if self.field.layout["kind"] == "volume":
+                self.icss_tab.draw(silent=True)
+            elif self.field.layout["kind"] == "plane":
+                self.map_tab.refresh()
 
     # -- public API ----------------------------------------------------------
 
@@ -461,7 +469,16 @@ class NicsAnalyzerDialog(QDialog):
 
     def _show_map_tab(self):
         """Switch to the 2D Map tab."""
+        if hasattr(self, "map_tab"):
+            self.map_tab.refresh()
         self.tabs.setCurrentWidget(self.map_tab)
+
+    def _on_tab_changed(self, index):
+        widget = self.tabs.widget(index)
+        if hasattr(self, "icss_tab") and widget is self.icss_tab:
+            self.icss_tab.draw(silent=True)
+        elif hasattr(self, "map_tab") and widget is self.map_tab:
+            self.map_tab.refresh()
 
     # -- actions -------------------------------------------------------------
 

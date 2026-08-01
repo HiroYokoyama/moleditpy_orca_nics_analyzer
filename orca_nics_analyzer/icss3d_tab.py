@@ -218,7 +218,7 @@ class Icss3DTab(QWidget):
         self._configure_slices()
 
         self._build_cube_ui(layout)
-        
+
         # Initial draw
         self.draw(silent=True)
 
@@ -271,13 +271,23 @@ class Icss3DTab(QWidget):
         self.slice_spin.blockSignals(True)
         self.slice_spin.setValue(value)
         self.slice_spin.blockSignals(False)
-        self.draw()
+        self.update_cut_axis_preview()
+        if (
+            hasattr(self, "_on_slice_settings_changed")
+            and self._on_slice_settings_changed
+        ):
+            self._on_slice_settings_changed()
 
     def _on_slice_spin_changed(self, value):
         self.slice_slider.blockSignals(True)
         self.slice_slider.setValue(value)
         self.slice_slider.blockSignals(False)
-        self.draw()
+        self.update_cut_axis_preview()
+        if (
+            hasattr(self, "_on_slice_settings_changed")
+            and self._on_slice_settings_changed
+        ):
+            self._on_slice_settings_changed()
 
     def _build_cube_ui(self, layout):
         cube_group = QGroupBox("Cube file")
@@ -389,7 +399,9 @@ class Icss3DTab(QWidget):
         plotter = self._plotter()
         if plotter is None:
             if not silent:
-                QMessageBox.warning(self, "3D view", "The main 3D viewer is not available.")
+                QMessageBox.warning(
+                    self, "3D view", "The main 3D viewer is not available."
+                )
             return
 
         component = self.component.currentData()

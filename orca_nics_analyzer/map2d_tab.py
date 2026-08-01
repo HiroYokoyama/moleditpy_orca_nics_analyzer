@@ -296,24 +296,11 @@ class Map2DTab(QWidget):
         else:
             span = self.vmax.value()
 
-        rings = self.field.rings
         a1_offset = 0.0
         a2_offset = 0.0
-        if rings:
-            plane_center_3d = (
-                self.field.layout["origin"]
-                + float(
-                    self.field.layout["coords"][info["order"][2]][info["slice_index"]]
-                )
-                * info["normal"]
-            )
-            nearest, _, _ = nm.nearest_ring(plane_center_3d, rings)
-            rel_ring = nearest["centroid"] - self.field.layout["origin"]
-            a1_offset = rel_ring @ info["axis1"]
-            a2_offset = rel_ring @ info["axis2"]
 
-        plot_a1 = info["a1"] - a1_offset
-        plot_a2 = info["a2"] - a2_offset
+        plot_a1 = info["a1"]
+        plot_a2 = info["a2"]
 
         ax = self.figure.add_subplot(111)
         levels = np.linspace(-span, span, self.levels.value())
