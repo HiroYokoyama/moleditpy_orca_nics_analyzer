@@ -704,14 +704,18 @@ class TestIcssTab:
         assert fake_plotter.add_mesh.call_count == 0
 
     def test_generates_and_reuses_the_cube(self, make_dialog, volume_out, tmp_path):
+        pytest.importorskip("pyvista")
         source = tmp_path / "run.out"
         source.write_bytes(open(volume_out, "rb").read())
         dialog = make_dialog(str(source))
+
+        # The first 3D render now persists the selected field automatically.
         path = dialog.icss_tab.generate_cube()
         assert os.path.exists(path)
-        assert "Wrote cube" in dialog.icss_tab.status.text()
-        dialog.icss_tab.generate_cube()
         assert "Reused cached" in dialog.icss_tab.status.text()
+
+        dialog.icss_tab.generate_cube(force=True)
+        assert "Wrote cube" in dialog.icss_tab.status.text()
 
     def test_initial_3d_draw_auto_saves_selected_cube(
         self, make_dialog, volume_out, tmp_path
@@ -724,11 +728,13 @@ class TestIcssTab:
         assert cube_path.exists()
         assert "Cached:" in dialog.icss_tab.cache_label.text()
     def test_cache_label_tracks_the_file(self, make_dialog, volume_out, tmp_path):
+        pytest.importorskip("pyvista")
         source = tmp_path / "run.out"
         source.write_bytes(open(volume_out, "rb").read())
         dialog = make_dialog(str(source))
-        assert "Not generated yet" in dialog.icss_tab.cache_label.text()
-        dialog.icss_tab.generate_cube()
+        assert "Cached:" in dialog.icss_tab.cache_label.text()
+
+        dialog.icss_tab.generate_cube(force=True)
         assert "Cached:" in dialog.icss_tab.cache_label.text()
 
     def test_save_cube_as(self, make_dialog, volume_out, tmp_path):
