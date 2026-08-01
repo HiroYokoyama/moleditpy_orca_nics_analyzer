@@ -134,31 +134,31 @@ class Map2DTab(QWidget):
         self.show_contours.toggled.connect(self.refresh)
         grid.addWidget(self.show_contours, 1, 4)
 
-        self.show_cut_axis = QCheckBox("Cut axis arrow")
-        self.show_cut_axis.setChecked(True)
-        self.show_cut_axis.toggled.connect(self.refresh)
-        grid.addWidget(self.show_cut_axis, 1, 5)
-
         self.show_probes = QCheckBox("Probe dots")
         self.show_probes.setChecked(False)
         self.show_probes.toggled.connect(self.refresh)
-        grid.addWidget(self.show_probes, 2, 0)
+        grid.addWidget(self.show_probes, 1, 5)
+
+        self.show_cut_axis = QCheckBox("Cut axis line")
+        self.show_cut_axis.setChecked(True)
+        self.show_cut_axis.toggled.connect(self.refresh)
+        grid.addWidget(self.show_cut_axis, 2, 0, 1, 2)
 
         self.slice_label = QLabel("Slice:")
-        grid.addWidget(self.slice_label, 2, 0)
+        grid.addWidget(self.slice_label, 3, 0)
         self.slice_slider = QSlider(Qt.Orientation.Horizontal)
         self.slice_slider.setMinimum(0)
         self.slice_slider.valueChanged.connect(self.refresh)
-        grid.addWidget(self.slice_slider, 2, 1, 1, 4)
+        grid.addWidget(self.slice_slider, 3, 1, 1, 4)
         self.slice_value = QLabel("-")
-        grid.addWidget(self.slice_value, 2, 5)
+        grid.addWidget(self.slice_value, 3, 5)
 
         self.stack_axis_label = QLabel("Cut axis:")
-        grid.addWidget(self.stack_axis_label, 3, 0)
+        grid.addWidget(self.stack_axis_label, 4, 0)
         self.stack_axis_combo = QComboBox()
         self.stack_axis_combo.addItems(["Lattice axis 1", "Lattice axis 2", "Lattice axis 3"])
         self.stack_axis_combo.currentIndexChanged.connect(self._on_stack_axis_changed)
-        grid.addWidget(self.stack_axis_combo, 3, 1, 1, 2)
+        grid.addWidget(self.stack_axis_combo, 4, 1, 1, 2)
         
         self.stack_axis_label.setVisible(False)
         self.stack_axis_combo.setVisible(False)
@@ -374,42 +374,23 @@ class Map2DTab(QWidget):
 
         show_arrow = hasattr(self, "show_cut_axis") and self.show_cut_axis.isChecked()
         
+        if not show_arrow:
+            return
+
         if fixed_axis == 0:
             # Fix a row of a1 -> x is fixed, draw a VERTICAL line at x = a1[idx]
             if idx < len(a1):
                 x = a1[idx]
-                if show_arrow:
-                    y_start, y_end = a2[0], a2[-1]
-                    ax.annotate(
-                        "",
-                        xy=(x, y_end),
-                        xytext=(x, y_start),
-                        arrowprops=dict(arrowstyle="->", color="#ff9900", lw=1.2, ls="--"),
-                    )
-                else:
-                    ax.axvline(
-                        x, color="#ff9900", lw=1.2, linestyle="--", alpha=0.85
-                    )
-                # Plot invisible line for legend
-                ax.plot([], [], color="#ff9900", lw=1.2, ls="--", label=f"1D slice (axis-1 row {idx})")
+                ax.axvline(
+                    x, color="#ff9900", lw=1.2, linestyle="--", alpha=0.85, label=f"1D slice (axis-1 row {idx})"
+                )
         else:
             # Fix a column of a2 -> y is fixed, draw a HORIZONTAL line at y = a2[idx]
             if idx < len(a2):
                 y = a2[idx]
-                if show_arrow:
-                    x_start, x_end = a1[0], a1[-1]
-                    ax.annotate(
-                        "",
-                        xy=(x_end, y),
-                        xytext=(x_start, y),
-                        arrowprops=dict(arrowstyle="->", color="#ff9900", lw=1.2, ls="--"),
-                    )
-                else:
-                    ax.axhline(
-                        y, color="#ff9900", lw=1.2, linestyle="--", alpha=0.85
-                    )
-                # Plot invisible line for legend
-                ax.plot([], [], color="#ff9900", lw=1.2, ls="--", label=f"1D slice (axis-2 col {idx})")
+                ax.axhline(
+                    y, color="#ff9900", lw=1.2, linestyle="--", alpha=0.85, label=f"1D slice (axis-2 col {idx})"
+                )
 
     def _slice_offset(self, info):
         """Signed distance from the ring plane to this slice, along the normal."""

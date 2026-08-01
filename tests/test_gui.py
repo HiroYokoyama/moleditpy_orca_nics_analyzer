@@ -633,8 +633,8 @@ class TestIcssTab:
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
         dialog.icss_tab.draw()
-        # 2 isosurfaces + 1 cut axis preview
-        assert fake_plotter.add_mesh.call_count == 3
+        # 2 isosurfaces + 1 cut axis plane + 1 cut axis plane edge
+        assert fake_plotter.add_mesh.call_count == 4
         assert "isosurface" in dialog.icss_tab.status.text()
 
     def test_one_sign_only(self, make_dialog, volume_out, fake_plotter):
@@ -642,8 +642,8 @@ class TestIcssTab:
         dialog = make_dialog(volume_out)
         dialog.icss_tab.show_positive.setChecked(False)
         dialog.icss_tab.draw()
-        # 1 isosurface + 1 cut axis preview
-        assert fake_plotter.add_mesh.call_count == 2
+        # 1 isosurface + 1 cut axis plane + 1 cut axis plane edge
+        assert fake_plotter.add_mesh.call_count == 3
 
     def test_cmap_and_span_uses_tab_controls(self, make_dialog, volume_out):
         pytest.importorskip("pyvista")

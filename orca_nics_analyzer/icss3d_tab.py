@@ -340,31 +340,53 @@ class Icss3DTab(QWidget):
             return
             
         self._remove(plotter, ACTOR_CUT_AXIS)
+        self._remove(plotter, ACTOR_CUT_AXIS + "_edge")
 
-        # Draw cut axis arrow for volumes if checked
+        # Draw cut axis plane for volumes if checked
         if self.show_cut_axis.isChecked() and self.field.is_gridded and self.field.layout["kind"] == "volume":
             stack_idx = self.field.stack_axis_index()
             if stack_idx is not None:
                 axes = self.field.layout["axes"]
                 coords = self.field.layout["coords"]
                 
-                # center of the grid
-                center_pt = self.field.layout["origin"] + sum(axes[a] * np.mean(coords[a]) for a in range(3))
+                # The other two axes span the plane
+                idx1, idx2 = [i for i in range(3) if i != stack_idx]
                 
-                direction = axes[stack_idx]
-                length = (coords[stack_idx][-1] - coords[stack_idx][0]) if len(coords[stack_idx]) > 1 else 5.0
+                # Center of the stack axis
+                stack_center = np.mean(coords[stack_idx])
                 
-                # Center the arrow
-                start = center_pt - direction * (length / 2)
-                arrow = pv.Arrow(start=start, direction=direction, scale=length)
+                # Bounds of the other two axes
+                c1_min, c1_max = coords[idx1][0], coords[idx1][-1]
+                c2_min, c2_max = coords[idx2][0], coords[idx2][-1]
+                
+                origin = self.field.layout["origin"]
+                
+                # Corners of the plane
+                p00 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_min + axes[idx2] * c2_min
+                p10 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_max + axes[idx2] * c2_min
+                p01 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_min + axes[idx2] * c2_max
+                p11 = origin + axes[stack_idx] * stack_center + axes[idx1] * c1_max + axes[idx2] * c2_max
+                
+                plane = pv.StructuredGrid()
+                plane.points = np.vstack((p00, p10, p01, p11))
+                plane.dimensions = (2, 2, 1)
                 
                 plotter.add_mesh(
-                    arrow,
+                    plane,
                     color="#ff9900",
+                    opacity=0.3,
                     name=ACTOR_CUT_AXIS,
                     show_scalar_bar=False,
                 )
+                # also add the outline
+                plotter.add_mesh(
+                    plane.extract_feature_edges(),
+                    color="#ff9900",
+                    line_width=2,
+                    name=ACTOR_CUT_AXIS + "_edge",
+                )
                 self._actors.add(ACTOR_CUT_AXIS)
+                self._actors.add(ACTOR_CUT_AXIS + "_edge")
         try:
             plotter.render()
         except Exception:
