@@ -55,7 +55,9 @@ and they have to be named in the NMR nucleus selection:
 *
 ```
 
-The plugin identifies probes by their zero nuclear charge in ORCA's
+For a regular 3D probe grid, the volume opens directly on the 3D ICSS tab; the initial
+surface render also auto-saves the selected field as a cube beside the output. The plugin
+identifies probes by their zero nuclear charge in ORCA's
 `CARTESIAN COORDINATES (A.U.)` block, so it does not matter how the input was
 produced or what element the ghosts borrow.
 
@@ -77,7 +79,7 @@ the NICS_zz controls are disabled rather than guessing.
 
 ### Cube files
 
-Cubes are written to `<output>_nics_cubes/` beside the ORCA file and reused on the
+Cubes are written automatically to `<output>_nics_cubes/` beside the ORCA file and reused on the
 next open when the stamped grid still matches; **Regenerate** overwrites. They are
 ordinary Gaussian cubes in ppm, readable by Cube File Viewer, Orbital Comparator,
 VMD and the rest. A ring-frame grid is not axis-aligned, and its voxel vectors are
