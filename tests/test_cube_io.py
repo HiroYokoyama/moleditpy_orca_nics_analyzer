@@ -99,6 +99,11 @@ class TestReading:
         assert result["data"].shape == (2, 1, 1)
         assert result["data"].ravel() == pytest.approx([1.0, 2.0])
 
+    def test_incomplete_header_raises_value_error(self, tmp_path):
+        path = tmp_path / "short-header.cube"
+        path.write_text("comment\nstamp\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="incomplete header"):
+            cube_io.read_cube(str(path))
     def test_truncated_data_raises(self, tmp_path):
         path = tmp_path / "short.cube"
         path.write_text(
