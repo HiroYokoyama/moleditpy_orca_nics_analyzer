@@ -329,9 +329,12 @@ class NicsAnalyzerDialog(QDialog):
             return
         name = os.path.basename(self.field.filename or "NICS molecule")
         try:
+            self._loading_structure = True
             self.context.show_xyz_data(xyz, source_name=name)
         except Exception as e:  # noqa: BLE001
             logging.warning("[orca_nics_analyzer] show_xyz_data: %s", e)
+        finally:
+            self._loading_structure = False
 
     # -- drag-and-drop -------------------------------------------------------
 

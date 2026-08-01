@@ -14,7 +14,7 @@ import logging
 import os
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.3.0"
+PLUGIN_VERSION = "0.3.1"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
@@ -132,6 +132,8 @@ def initialize(context):
     def on_reset():
         win = context.get_window("nics_analyzer")
         if win is not None:
+            if getattr(win, "_loading_structure", False) is True:
+                return
             try:
                 win.close()
             except (RuntimeError, AttributeError) as e:
