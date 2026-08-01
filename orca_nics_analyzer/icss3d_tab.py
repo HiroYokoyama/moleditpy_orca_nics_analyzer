@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSlider,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -67,11 +68,19 @@ def structured_grid(data, origin, steps):
 class Icss3DTab(QWidget):
     """Isovalue controls plus cube generation/caching."""
 
-    def __init__(self, field, plotter_getter, plugin_version="0.0.0", parent=None):
+    def __init__(
+        self,
+        field,
+        plotter_getter,
+        plugin_version="0.0.0",
+        parent=None,
+        show_in_2d=None,
+    ):
         super().__init__(parent)
         self.field = field
         self._plotter_getter = plotter_getter
         self.plugin_version = plugin_version
+        self._show_in_2d = show_in_2d
         self._actors = set()
         self._build_ui()
         self._update_cache_label()
@@ -140,7 +149,7 @@ class Icss3DTab(QWidget):
         grid.addWidget(self.show_negative, 2, 3)
 
         self.show_cut_axis = QCheckBox("Cut axis preview")
-        self.show_cut_axis.setChecked(True)
+        self.show_cut_axis.setChecked(False)
         self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
         grid.addWidget(self.show_cut_axis, 3, 2)
 
@@ -158,9 +167,16 @@ class Icss3DTab(QWidget):
         self.slice_slider = QSlider(Qt.Orientation.Horizontal)
         self.slice_slider.setMinimum(0)
         self.slice_slider.valueChanged.connect(self._on_slice_changed)
-        grid.addWidget(self.slice_slider, 6, 1, 1, 2)
-        self.slice_value = QLabel("-")
-        grid.addWidget(self.slice_value, 6, 3)
+        grid.addWidget(self.slice_slider, 6, 1)
+        self.slice_spin = QSpinBox()
+        self.slice_spin.setMinimum(0)
+        self.slice_spin.valueChanged.connect(self._on_slice_spin_changed)
+        grid.addWidget(self.slice_spin, 6, 2)
+
+        self.goto_2d_btn = QPushButton("→ 2D Map tab")
+        self.goto_2d_btn.setToolTip("Switch to the 2D Map tab to view this slice.")
+        self.goto_2d_btn.clicked.connect(self._emit_show_in_2d)
+        grid.addWidget(self.goto_2d_btn, 6, 3)
 
         self.stack_axis_label.setVisible(False)
         self.stack_axis_combo.setVisible(False)
@@ -202,6 +218,9 @@ class Icss3DTab(QWidget):
         self._configure_slices()
 
         self._build_cube_ui(layout)
+        
+        # Initial draw
+        self.draw(silent=True)
 
     def _on_auto_toggled(self, checked):
         self.vmax.setEnabled(not checked)
@@ -225,10 +244,21 @@ class Icss3DTab(QWidget):
         n = info["n_slices"]
         self.slice_slider.setMaximum(max(0, n - 1))
         self.slice_slider.setValue(info["slice_index"])
+
+        self.slice_spin.blockSignals(True)
+        self.slice_spin.setMaximum(max(0, n - 1))
+        self.slice_spin.setValue(info["slice_index"])
+        self.slice_spin.blockSignals(False)
+
         visible = n > 1
         self.slice_slider.setVisible(visible)
         self.slice_label.setVisible(visible)
-        self.slice_value.setVisible(visible)
+        self.slice_spin.setVisible(visible)
+        self.goto_2d_btn.setVisible(visible)
+
+    def _emit_show_in_2d(self):
+        if self._show_in_2d is not None:
+            self._show_in_2d()
 
     def _on_stack_axis_changed(self, index):
         self.field.set_stack_axis(index)
@@ -237,10 +267,17 @@ class Icss3DTab(QWidget):
         if hasattr(self, "_on_slice_settings_changed"):
             self._on_slice_settings_changed()
 
-    def _on_slice_changed(self):
-        self.update_cut_axis_preview()
-        if hasattr(self, "_on_slice_settings_changed"):
-            self._on_slice_settings_changed()
+    def _on_slice_changed(self, value):
+        self.slice_spin.blockSignals(True)
+        self.slice_spin.setValue(value)
+        self.slice_spin.blockSignals(False)
+        self.draw()
+
+    def _on_slice_spin_changed(self, value):
+        self.slice_slider.blockSignals(True)
+        self.slice_slider.setValue(value)
+        self.slice_slider.blockSignals(False)
+        self.draw()
 
     def _build_cube_ui(self, layout):
         cube_group = QGroupBox("Cube file")
@@ -331,25 +368,28 @@ class Icss3DTab(QWidget):
         except Exception:
             return "#3c6ec8", "#c8463c"
 
-    def draw(self):
+    def draw(self, silent=False):
         if pv is None:
-            QMessageBox.information(
-                self,
-                "3D view",
-                "pyvista is not installed, so isosurfaces cannot be drawn.",
-            )
+            if not silent:
+                QMessageBox.information(
+                    self,
+                    "3D view",
+                    "pyvista is not installed, so isosurfaces cannot be drawn.",
+                )
             return
         if not self.field.is_gridded:
-            QMessageBox.information(
-                self,
-                "3D view",
-                "Isosurfaces need a regular 3D grid of probes.\n"
-                f"The detected layout is '{self.field.layout['kind']}'.",
-            )
+            if not silent:
+                QMessageBox.information(
+                    self,
+                    "3D view",
+                    "Isosurfaces need a regular 3D grid of probes.\n"
+                    f"The detected layout is '{self.field.layout['kind']}'.",
+                )
             return
         plotter = self._plotter()
         if plotter is None:
-            QMessageBox.warning(self, "3D view", "The main 3D viewer is not available.")
+            if not silent:
+                QMessageBox.warning(self, "3D view", "The main 3D viewer is not available.")
             return
 
         component = self.component.currentData()

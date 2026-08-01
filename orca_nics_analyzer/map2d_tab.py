@@ -162,17 +162,25 @@ class Map2DTab(QWidget):
         self._slice1d_slider = QSlider(Qt.Orientation.Horizontal)
         self._slice1d_slider.setMinimum(0)
         self._slice1d_slider.setMaximum(0)
-        self._slice1d_slider.valueChanged.connect(self.refresh)
+        self._slice1d_slider.valueChanged.connect(self._on_slice1d_changed)
         self._slice1d_slider.setToolTip("Row / column index to extract.")
         s1d.addWidget(self._slice1d_slider, 1)
 
-        self._slice1d_label = QLabel("0")
-        s1d.addWidget(self._slice1d_label)
+        self._slice1d_spin = QSpinBox()
+        self._slice1d_spin.setMinimum(0)
+        self._slice1d_spin.setMaximum(0)
+        self._slice1d_spin.valueChanged.connect(self._on_slice1d_spin_changed)
+        s1d.addWidget(self._slice1d_spin)
 
         self._slice1d_btn = QPushButton("→ 1D Scan tab")
         self._slice1d_btn.setToolTip("Send this 1D profile to the 1D Scan tab.")
         self._slice1d_btn.clicked.connect(self._emit_slice_to_1d)
         s1d.addWidget(self._slice1d_btn)
+
+        self.show_1d_line = QCheckBox("Show line in map")
+        self.show_1d_line.setChecked(True)
+        self.show_1d_line.toggled.connect(self.refresh)
+        s1d.addWidget(self.show_1d_line)
 
         layout.addWidget(slice1d_group)
 
@@ -213,8 +221,15 @@ class Map2DTab(QWidget):
             return
         fixed_axis = self._slice1d_axis.currentData()
         n = len(info["a1"]) if fixed_axis == 0 else len(info["a2"])
+        self._slice1d_slider.blockSignals(True)
         self._slice1d_slider.setMaximum(max(0, n - 1))
-        self._slice1d_label.setText(str(self._slice1d_slider.value()))
+        self._slice1d_slider.setValue(max(0, n - 1) // 2)
+        self._slice1d_slider.blockSignals(False)
+
+        self._slice1d_spin.blockSignals(True)
+        self._slice1d_spin.setMaximum(max(0, n - 1))
+        self._slice1d_spin.setValue(self._slice1d_slider.value())
+        self._slice1d_spin.blockSignals(False)
 
     def _on_auto_toggled(self, checked):
         self.vmax.setEnabled(not checked)
@@ -222,6 +237,18 @@ class Map2DTab(QWidget):
 
     def _on_slice1d_axis_changed(self):
         self._update_slice1d_range()
+        self.refresh()
+
+    def _on_slice1d_changed(self, value):
+        self._slice1d_spin.blockSignals(True)
+        self._slice1d_spin.setValue(value)
+        self._slice1d_spin.blockSignals(False)
+        self.refresh()
+
+    def _on_slice1d_spin_changed(self, value):
+        self._slice1d_slider.blockSignals(True)
+        self._slice1d_slider.setValue(value)
+        self._slice1d_slider.blockSignals(False)
         self.refresh()
 
     def _component(self):
@@ -339,13 +366,13 @@ class Map2DTab(QWidget):
         if hasattr(self, "_set_slice_value_label"):
             self._set_slice_value_label("-" if offset is None else f"{offset:+.2f} Å")
 
-        self._slice1d_label.setText(str(self._slice1d_slider.value()))
-
         self.canvas.draw_idle()
 
     def _draw_slice1d_crosshair(self, ax, info, a1_offset, a2_offset):
         """Draw a dashed line on the map showing where the 1D slice will cut."""
         if not self.field.is_gridded:
+            return
+        if not getattr(self, "show_1d_line", None) or not self.show_1d_line.isChecked():
             return
         fixed_axis = self._slice1d_axis.currentData()
         idx = self._slice1d_slider.value()
