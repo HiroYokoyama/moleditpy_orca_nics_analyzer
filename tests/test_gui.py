@@ -1149,3 +1149,12 @@ class TestMap2DSliceControls:
         dlg.icss_tab._on_slice_settings_changed = MagicMock()
         dlg.icss_tab.slice_slider.setValue(0)
         assert dlg.icss_tab._on_slice_settings_changed.called
+
+    def test_icss3d_slice_group_structure(self, make_dialog, volume_out):
+        from PyQt6.QtWidgets import QGroupBox
+
+        dlg = make_dialog(volume_out)
+        assert isinstance(dlg.icss_tab.slice_group, QGroupBox)
+        assert dlg.icss_tab.slice_group.title() == "Slice → 2D"
+        # Verify show_cut_axis is child of slice_group
+        assert dlg.icss_tab.show_cut_axis.parentWidget() is dlg.icss_tab.slice_group
