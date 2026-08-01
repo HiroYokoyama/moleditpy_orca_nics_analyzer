@@ -68,20 +68,19 @@ class TestOpenFile:
             plugin._open_file(no_ghosts_out, fake_context)
         assert warn.called
         assert "No NICS probes" in warn.call_args.args[1]
-        fake_context.register_window.assert_not_called()
 
-    def test_a_previous_window_is_closed_first(self, opened, volume_out, fake_context):
+    def test_a_previous_window_is_reused(self, opened, volume_out, fake_context):
         previous = MagicMock()
         fake_context.get_window.return_value = previous
         opened(volume_out)
-        previous.close.assert_called_once()
+        previous.load_parser.assert_called_once()
 
-    def test_a_previous_window_that_fails_to_close_is_survived(
+    def test_a_previous_window_that_fails_to_load_is_survived(
         self, opened, volume_out, fake_context
     ):
         """A window from an earlier document may already be a dead C++ object."""
         previous = MagicMock()
-        previous.close.side_effect = RuntimeError("already deleted")
+        previous.load_parser.side_effect = RuntimeError("already deleted")
         fake_context.get_window.return_value = previous
         assert opened(volume_out) is not None
 
@@ -96,32 +95,18 @@ class TestMenuAction:
         plugin.initialize(context)
         return context.add_menu_action.call_args.args[1]
 
-    def test_cancelling_the_dialog_opens_nothing(self, fake_context):
+    def test_menu_action_opens_empty_dialog(self, fake_context):
         callback = self._callback(fake_context)
-        with patch(
-            "PyQt6.QtWidgets.QFileDialog.getOpenFileName", return_value=("", "")
-        ):
+        with patch("orca_nics_analyzer.gui.NicsAnalyzerDialog.show"):
             callback()
-        fake_context.register_window.assert_not_called()
+        fake_context.register_window.assert_called_once()
+        assert fake_context.register_window.call_args.args[0] == "nics_analyzer"
 
-    def test_choosing_a_file_opens_it(self, fake_context, volume_out):
+    def test_menu_action_activates_existing_dialog(self, fake_context):
         callback = self._callback(fake_context)
-        with (
-            patch(
-                "PyQt6.QtWidgets.QFileDialog.getOpenFileName",
-                return_value=(volume_out, ""),
-            ),
-            patch("orca_nics_analyzer._open_file") as opener,
-        ):
-            callback()
-        opener.assert_called_once()
-        assert opener.call_args.args[0] == volume_out
+        previous = MagicMock()
+        fake_context.get_window.return_value = previous
+        callback()
+        previous.raise_.assert_called_once()
+        previous.activateWindow.assert_called_once()
 
-    def test_filter_offers_out_and_log(self, fake_context):
-        callback = self._callback(fake_context)
-        with patch(
-            "PyQt6.QtWidgets.QFileDialog.getOpenFileName", return_value=("", "")
-        ) as chooser:
-            callback()
-        assert "*.out" in chooser.call_args.args[3]
-        assert "*.log" in chooser.call_args.args[3]

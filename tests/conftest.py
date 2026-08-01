@@ -80,6 +80,9 @@ def fake_context(qapp, fake_plotter):
 
     The window is a real QWidget, not a mock — the plugin passes it to
     QDialog as a parent, which rejects anything that is not a QWidget.
+
+    ``show_xyz_data`` is a MagicMock so tests can assert on calls to it
+    without needing the full host application.
     """
     from unittest.mock import MagicMock
     from PyQt6.QtWidgets import QWidget
@@ -90,5 +93,6 @@ def fake_context(qapp, fake_plotter):
     context = MagicMock()
     context.get_main_window.return_value = main_window
     context.get_window.return_value = None
+    context.show_xyz_data.return_value = None  # realistic: may return a mol or None
     context._main_window = main_window  # keep it alive for the test's duration
     return context

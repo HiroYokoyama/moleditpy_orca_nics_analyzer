@@ -1,4 +1,9 @@
-"""2D NICS map: filled contours of the probe plane, with the molecule on top."""
+"""2D NICS map: filled contours of the probe plane, with the molecule on top.
+
+The tab also hosts the 2D → 1D slicing controls: a fixed-axis selector and
+a position slider let the user extract any row/column from the current 2D
+plane and send it to the 1D Scan tab for display and export.
+"""
 
 import logging
 import os
@@ -42,12 +47,17 @@ COLORMAPS = ("seismic", "RdBu_r", "coolwarm", "bwr", "PuOr_r")
 
 
 class Map2DTab(QWidget):
-    """Contour map of one slice of the probe grid."""
+    """Contour map of one slice of the probe grid.
 
-    def __init__(self, field, parent=None, show_in_3d=None):
+    ``show_slice_in_1d`` is an optional callback ``(data_dict) -> None``
+    supplied by the parent dialog to route extracted 1D slices to the scan tab.
+    """
+
+    def __init__(self, field, parent=None, show_in_3d=None, show_slice_in_1d=None):
         super().__init__(parent)
         self.field = field
         self._show_in_3d = show_in_3d
+        self._show_slice_in_1d = show_slice_in_1d
         self.canvas = None
         self.figure = None
         self._build_ui()
@@ -140,6 +150,42 @@ class Map2DTab(QWidget):
 
         layout.addWidget(controls)
 
+        # ---- 2D → 1D slice controls ------------------------------------
+        slice1d_group = QGroupBox("Slice → 1D")
+        slice1d_group.setToolTip(
+            "Extract a 1D profile from the current 2D map by fixing one "
+            "in-plane axis and sweeping the other."
+        )
+        s1d = QHBoxLayout(slice1d_group)
+
+        s1d.addWidget(QLabel("Fix:"))
+        self._slice1d_axis = QComboBox()
+        self._slice1d_axis.addItem("Axis-1 row  (walk axis-2)", 0)
+        self._slice1d_axis.addItem("Axis-2 col  (walk axis-1)", 1)
+        self._slice1d_axis.currentIndexChanged.connect(self._on_slice1d_axis_changed)
+        s1d.addWidget(self._slice1d_axis)
+
+        s1d.addWidget(QLabel("Index:"))
+        self._slice1d_slider = QSlider(Qt.Orientation.Horizontal)
+        self._slice1d_slider.setMinimum(0)
+        self._slice1d_slider.setMaximum(0)
+        self._slice1d_slider.valueChanged.connect(self.refresh)
+        self._slice1d_slider.setToolTip("Row / column index to extract.")
+        s1d.addWidget(self._slice1d_slider, 1)
+
+        self._slice1d_label = QLabel("0")
+        s1d.addWidget(self._slice1d_label)
+
+        self._slice1d_btn = QPushButton("→ 1D Scan tab")
+        self._slice1d_btn.setToolTip(
+            "Send this 1D profile to the 1D Scan tab."
+        )
+        self._slice1d_btn.clicked.connect(self._emit_slice_to_1d)
+        s1d.addWidget(self._slice1d_btn)
+
+        layout.addWidget(slice1d_group)
+
+        # ---- bottom buttons --------------------------------------------
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         if self._show_in_3d is not None:
@@ -174,8 +220,28 @@ class Map2DTab(QWidget):
         self.slice_label.setVisible(visible)
         self.slice_value.setVisible(visible)
 
+        # Set up the 2D→1D slider range based on the first in-plane axis.
+        self._update_slice1d_range()
+
+    def _update_slice1d_range(self):
+        """Sync the 2D→1D index slider to the current in-plane axis choice."""
+        if not self.field.is_gridded:
+            return
+        try:
+            info = self.field.plane_data(self._component())
+        except ValueError:
+            return
+        fixed_axis = self._slice1d_axis.currentData()
+        n = len(info["a1"]) if fixed_axis == 0 else len(info["a2"])
+        self._slice1d_slider.setMaximum(max(0, n - 1))
+        self._slice1d_label.setText(str(self._slice1d_slider.value()))
+
     def _on_auto_toggled(self, checked):
         self.vmax.setEnabled(not checked)
+        self.refresh()
+
+    def _on_slice1d_axis_changed(self):
+        self._update_slice1d_range()
         self.refresh()
 
     def _component(self):
@@ -247,11 +313,14 @@ class Map2DTab(QWidget):
         if self.show_molecule.isChecked():
             self._draw_molecule(ax, info)
 
+        # ---- 2D→1D crosshair overlay ------------------------------------
+        self._draw_slice1d_crosshair(ax, info)
+
         label = "NICS$_{zz}$" if component == "zz" else "NICS(iso)"
         bar = self.figure.colorbar(mesh, ax=ax)
         bar.set_label(f"{label} / ppm")
-        ax.set_xlabel("in-plane axis 1 / A")
-        ax.set_ylabel("in-plane axis 2 / A")
+        ax.set_xlabel("in-plane axis 1 / Å")
+        ax.set_ylabel("in-plane axis 2 / Å")
         ax.set_aspect("equal")
 
         offset = self._slice_offset(info)
@@ -259,11 +328,43 @@ class Map2DTab(QWidget):
         if info["n_slices"] > 1:
             title += f" — slice {info['slice_index'] + 1}/{info['n_slices']}"
         if offset is not None:
-            title += f" ({offset:+.2f} A from the ring plane)"
+            title += f" ({offset:+.2f} Å from the ring plane)"
         ax.set_title(title, fontsize=10)
-        self.slice_value.setText("-" if offset is None else f"{offset:+.2f} A")
+        self.slice_value.setText("-" if offset is None else f"{offset:+.2f} Å")
+        self._slice1d_label.setText(str(self._slice1d_slider.value()))
 
         self.canvas.draw_idle()
+
+    def _draw_slice1d_crosshair(self, ax, info):
+        """Draw a dashed line on the map showing where the 1D slice will cut."""
+        if not self.field.is_gridded:
+            return
+        fixed_axis = self._slice1d_axis.currentData()
+        idx = self._slice1d_slider.value()
+        a1, a2 = info["a1"], info["a2"]
+
+        if fixed_axis == 0:
+            # Fix a row of a1 → draw a horizontal line at a1[idx].
+            if idx < len(a1):
+                ax.axhline(
+                    a1[idx],
+                    color="#ff9900",
+                    lw=1.2,
+                    linestyle="--",
+                    alpha=0.85,
+                    label=f"1D slice (axis-1 row {idx})",
+                )
+        else:
+            # Fix a column of a2 → draw a vertical line at a2[idx].
+            if idx < len(a2):
+                ax.axvline(
+                    a2[idx],
+                    color="#ff9900",
+                    lw=1.2,
+                    linestyle="--",
+                    alpha=0.85,
+                    label=f"1D slice (axis-2 col {idx})",
+                )
 
     def _slice_offset(self, info):
         """Signed distance from the ring plane to this slice, along the normal."""
@@ -308,6 +409,36 @@ class Map2DTab(QWidget):
         except Exception as e:  # the host viewer is out of our control
             logging.warning("[orca_nics_analyzer] show in 3D: %s", e)
             QMessageBox.warning(self, "3D view", f"Could not draw the plane:\n{e}")
+
+    def _emit_slice_to_1d(self):
+        """Extract the current 1D slice and send it to the 1D Scan tab."""
+        if not self.field.is_gridded:
+            QMessageBox.information(
+                self,
+                "Slice → 1D",
+                "A regular grid is needed to extract a 1D slice.",
+            )
+            return
+        try:
+            data = self.field.extract_line(
+                component=self._component(),
+                fixed_in_plane_axis=self._slice1d_axis.currentData(),
+                fixed_index=self._slice1d_slider.value(),
+                stack_index=self.slice_slider.value(),
+            )
+        except (ValueError, IndexError) as e:
+            logging.warning("[orca_nics_analyzer] extract_line: %s", e)
+            QMessageBox.warning(self, "Slice → 1D", f"Could not extract slice:\n{e}")
+            return
+
+        if self._show_slice_in_1d is not None:
+            self._show_slice_in_1d(data)
+        else:
+            QMessageBox.information(
+                self,
+                "Slice → 1D",
+                "No 1D scan tab is connected to receive this slice.",
+            )
 
     def shutdown(self):
         """Cancel any queued redraw before the widget goes away.

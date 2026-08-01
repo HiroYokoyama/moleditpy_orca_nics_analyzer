@@ -1,4 +1,10 @@
-"""1D NICS scan: values along a line of probes, the usual NICS-scan plot."""
+"""1D NICS scan: values along a line of probes, the usual NICS-scan plot.
+
+The tab can display two sources of data:
+- The probe layout's native line scan (``field.line_data()``).
+- An externally-injected slice extracted from a 2D/3D grid via
+  ``field.extract_line()``, supplied through :meth:`show_slice`.
+"""
 
 import logging
 import os
@@ -30,13 +36,19 @@ except ImportError:  # matplotlib is an optional dependency
 
 
 class Scan1DTab(QWidget):
-    """NICS(iso) and NICS_zz against distance along the probe line."""
+    """NICS(iso) and NICS_zz against distance along the probe line.
+
+    Can also display an arbitrary 1D slice injected by :meth:`show_slice`.
+    """
 
     def __init__(self, field, parent=None):
         super().__init__(parent)
         self.field = field
         self.canvas = None
         self.figure = None
+        # When not None, this externally-supplied data dict overrides
+        # the native field.line_data() call.
+        self._slice_data = None
         self._build_ui()
         self.refresh()
 
@@ -83,6 +95,13 @@ class Scan1DTab(QWidget):
         self.show_points.setChecked(True)
         self.show_points.toggled.connect(self.refresh)
         row.addWidget(self.show_points)
+
+        self._clear_slice_btn = QPushButton("← Back to scan")
+        self._clear_slice_btn.setToolTip("Return to the native NICS scan view.")
+        self._clear_slice_btn.clicked.connect(self.clear_slice)
+        self._clear_slice_btn.setVisible(False)
+        row.addWidget(self._clear_slice_btn)
+
         row.addStretch(1)
         layout.addWidget(options)
 
@@ -96,28 +115,57 @@ class Scan1DTab(QWidget):
         buttons.addWidget(png_btn)
         layout.addLayout(buttons)
 
+    # -- public API (slice injection) ------------------------------------
+
+    def show_slice(self, data):
+        """Display an externally-extracted 1D slice dict.
+
+        The dict must have the same keys returned by
+        ``NicsField.extract_line()`` (``distance``, ``label``, ``iso``,
+        ``zz``, ``indices``, ``offsets``).  Calling this method switches
+        the tab into *slice mode*; call :meth:`clear_slice` to return to
+        the native scan view.
+
+        Args:
+            data (dict): Line-data dict from ``field.extract_line()``.
+        """
+        self._slice_data = data
+        if self._clear_slice_btn is not None:
+            self._clear_slice_btn.setVisible(True)
+        self.refresh()
+
+    def clear_slice(self):
+        """Return to the native probe-layout scan view."""
+        self._slice_data = None
+        if self._clear_slice_btn is not None:
+            self._clear_slice_btn.setVisible(False)
+        self.refresh()
+
     # -- drawing ---------------------------------------------------------
+
     def refresh(self):
         if self.canvas is None:
             return
         self.figure.clear()
         ax = self.figure.add_subplot(111)
 
-        try:
-            data = self.field.line_data()
-        except ValueError:
-            ax.axis("off")
-            ax.text(
-                0.5,
-                0.5,
-                "The probes do not lie on a line.\n"
-                f"Detected layout: {self.field.layout['kind']}.",
-                ha="center",
-                va="center",
-            )
-            self.canvas.draw_idle()
-            self.info.setText("")
-            return
+        data = self._slice_data
+        if data is None:
+            try:
+                data = self.field.line_data()
+            except ValueError:
+                ax.axis("off")
+                ax.text(
+                    0.5,
+                    0.5,
+                    "The probes do not lie on a line.\n"
+                    f"Detected layout: {self.field.layout['kind']}.",
+                    ha="center",
+                    va="center",
+                )
+                self.canvas.draw_idle()
+                self.info.setText("")
+                return
 
         style = "o-" if self.show_points.isChecked() else "-"
         drawn = False
@@ -126,7 +174,8 @@ class Scan1DTab(QWidget):
             (self.show_iso.isChecked(), "iso", "NICS(iso)", "#3c6ec8"),
         ):
             values = data[key]
-            if not enabled or not np.isfinite(values).any():
+            finite = np.isfinite(values)
+            if not enabled or not finite.any():
                 continue
             ax.plot(data["distance"], values, style, color=colour, label=label, ms=4)
             drawn = True
@@ -138,32 +187,59 @@ class Scan1DTab(QWidget):
         if drawn:
             ax.legend(fontsize=9)
 
-        component = "zz" if self.show_zz.isChecked() else "iso"
-        where, peak = self.field.scan_extremum(component)
+        # Mark extremum — only meaningful for the native scan.
+        where, peak = None, None
+        if self._slice_data is None:
+            component = "zz" if self.show_zz.isChecked() else "iso"
+            where, peak = self.field.scan_extremum(component)
+        else:
+            # For an injected slice compute the extremum inline.
+            component = "zz" if self.show_zz.isChecked() else "iso"
+            values = data[component]
+            finite = np.isfinite(values)
+            if finite.any():
+                idx = int(np.nanargmax(np.abs(np.where(finite, values, np.nan))))
+                where = float(data["distance"][idx])
+                peak = float(values[idx])
+
         if self.mark_extremum.isChecked() and peak is not None:
             ax.plot([where], [peak], "k*", ms=11, zorder=5)
             ax.annotate(
-                f"{peak:+.2f} ppm at {where:+.2f} A",
+                f"{peak:+.2f} ppm at {where:+.2f} Å",
                 (where, peak),
                 textcoords="offset points",
                 xytext=(8, 8),
                 fontsize=8,
             )
-        ax.set_title("NICS scan", fontsize=10)
+
+        # Title: describe the source.
+        if self._slice_data is not None:
+            src = self._slice_data
+            title = (
+                f"2D → 1D slice  (stack layer {src.get('stack_index', '?')}, "
+                f"fixed index {src.get('fixed_index', '?')})"
+            )
+        else:
+            title = "NICS scan"
+        ax.set_title(title, fontsize=10)
+
         self.canvas.draw_idle()
         self.info.setText(self._summary(data, component, where, peak))
 
     def _summary(self, data, component, where, peak):
-        parts = [f"{len(data['distance'])} probes along the scan"]
+        n = len(data["distance"])
+        src = self._slice_data
+        if src is not None:
+            parts = [f"{n} points  (extracted slice)"]
+        else:
+            parts = [f"{n} probes along the scan"]
         if peak is not None:
             name = "NICS_zz" if component == "zz" else "NICS(iso)"
-            parts.append(f"largest |{name}| {peak:+.2f} ppm at {where:+.2f} A")
+            parts.append(f"largest |{name}| {peak:+.2f} ppm at {where:+.2f} Å")
         offsets = data["offsets"]
         if offsets.size and float(np.max(offsets)) > 0.25:
-            # A scan is meant to run along the ring normal; drifting sideways
-            # means the values are not a clean height profile.
             parts.append(
-                f"note: probes stray up to {float(np.max(offsets)):.2f} A off the ring axis"
+                f"note: probes stray up to {float(np.max(offsets)):.2f} Å off the ring axis"
             )
         return "   |   ".join(parts)
 
@@ -178,6 +254,7 @@ class Scan1DTab(QWidget):
             self.canvas._draw_pending = False
 
     # -- export ----------------------------------------------------------
+
     def _default_path(self, suffix):
         if not self.field.filename:
             return ""
@@ -192,10 +269,32 @@ class Scan1DTab(QWidget):
         )
         if not path:
             return
+
+        # If showing an extracted slice, write that data; otherwise the
+        # full native scan CSV.
+        if self._slice_data is not None:
+            data = self._slice_data
+            lines = ["Index,Distance/Å,NICS(iso)/ppm,NICS_zz/ppm"]
+            for i, dist in enumerate(data["distance"]):
+                iso = data["iso"][i]
+                zz = data["zz"][i]
+                lines.append(
+                    f"{i},{dist:.4f},"
+                    f"{''.join(f'{iso:.4f}') if np.isfinite(iso) else ''},"
+                    f"{''.join(f'{zz:.4f}') if np.isfinite(zz) else ''}"
+                )
+            content = "\n".join(lines) + "\n"
+        else:
+            try:
+                content = self.field.scan_csv()
+            except ValueError as e:
+                QMessageBox.critical(self, "Export failed", str(e))
+                return
+
         try:
             with open(path, "w", encoding="utf-8", newline="") as fh:
-                fh.write(self.field.scan_csv())
-        except (OSError, ValueError) as e:
+                fh.write(content)
+        except OSError as e:
             logging.warning("[orca_nics_analyzer] scan CSV export: %s", e)
             QMessageBox.critical(
                 self, "Export failed", f"Could not write the file:\n{e}"

@@ -382,3 +382,107 @@ class TestValues:
     def test_iso_and_zz_differ(self, single_out):
         field = load_field(single_out)
         assert not np.allclose(field.values("iso"), field.values("zz"))
+
+
+class TestExtractLine:
+    """NicsField.extract_line: 2D → 1D slicing."""
+
+    def test_raises_for_non_gridded_field(self, single_out):
+        field = load_field(single_out)
+        assert not field.is_gridded
+        with pytest.raises(ValueError, match="regular grid"):
+            field.extract_line("iso", 0, 0)
+
+    def test_returns_expected_keys(self, plane_out):
+        field = load_field(plane_out)
+        data = field.extract_line("iso", 0, 0)
+        for key in ("distance", "label", "iso", "zz", "values", "indices", "offsets"):
+            assert key in data
+
+    def test_source_metadata_present(self, plane_out):
+        field = load_field(plane_out)
+        data = field.extract_line("iso", 0, 2)
+        assert data["source"] == "extract_line"
+        assert data["fixed_in_plane_axis"] == 0
+        assert data["fixed_index"] == 2
+
+    def test_walk_axis2_length_matches_a2(self, plane_out):
+        """Fixing axis-1 (fixed_in_plane_axis=0) → profile length == len(a2)."""
+        field = load_field(plane_out)
+        info = field.plane_data("iso")
+        n_a2 = len(info["a2"])
+        data = field.extract_line("iso", fixed_in_plane_axis=0, fixed_index=0)
+        assert len(data["distance"]) == n_a2
+        assert len(data["values"]) == n_a2
+
+    def test_walk_axis1_length_matches_a1(self, plane_out):
+        """Fixing axis-2 (fixed_in_plane_axis=1) → profile length == len(a1)."""
+        field = load_field(plane_out)
+        info = field.plane_data("iso")
+        n_a1 = len(info["a1"])
+        data = field.extract_line("iso", fixed_in_plane_axis=1, fixed_index=0)
+        assert len(data["distance"]) == n_a1
+        assert len(data["values"]) == n_a1
+
+    def test_iso_component_fills_iso_key(self, plane_out):
+        field = load_field(plane_out)
+        data = field.extract_line("iso", 0, 0)
+        assert np.isfinite(data["iso"]).any()
+        assert np.all(np.isnan(data["zz"]))
+
+    def test_zz_component_fills_zz_key(self, plane_out):
+        field = load_field(plane_out)
+        data = field.extract_line("zz", 0, 0)
+        assert np.isfinite(data["zz"]).any()
+        assert np.all(np.isnan(data["iso"]))
+
+    def test_values_equal_iso_for_iso_component(self, plane_out):
+        field = load_field(plane_out)
+        data = field.extract_line("iso", 0, 3)
+        np.testing.assert_array_equal(data["values"], data["iso"])
+
+    def test_values_equal_zz_for_zz_component(self, plane_out):
+        field = load_field(plane_out)
+        data = field.extract_line("zz", 1, 2)
+        np.testing.assert_array_equal(data["values"], data["zz"])
+
+    def test_index_clamped_to_zero_when_negative(self, plane_out):
+        field = load_field(plane_out)
+        data_neg = field.extract_line("iso", 0, -99)
+        data_zero = field.extract_line("iso", 0, 0)
+        np.testing.assert_array_almost_equal(data_neg["values"], data_zero["values"])
+
+    def test_index_clamped_to_max_when_too_large(self, plane_out):
+        field = load_field(plane_out)
+        info = field.plane_data("iso")
+        n = len(info["a1"])
+        data_big = field.extract_line("iso", 0, 9999)
+        data_last = field.extract_line("iso", 0, n - 1)
+        np.testing.assert_array_almost_equal(data_big["values"], data_last["values"])
+
+    def test_different_rows_give_different_values(self, plane_out):
+        field = load_field(plane_out)
+        d0 = field.extract_line("iso", 0, 0)
+        d4 = field.extract_line("iso", 0, 4)
+        # The field is not constant, so different rows differ somewhere.
+        assert not np.allclose(d0["values"], d4["values"])
+
+    def test_stack_index_accepted_for_volume(self, volume_out):
+        """extract_line on a volume honours the explicit stack_index."""
+        field = load_field(volume_out)
+        data0 = field.extract_line("iso", 0, 0, stack_index=0)
+        data2 = field.extract_line("iso", 0, 0, stack_index=2)
+        # Different stack layers should yield different profiles.
+        assert not np.allclose(data0["values"], data2["values"])
+
+    def test_stack_index_in_metadata(self, volume_out):
+        field = load_field(volume_out)
+        data = field.extract_line("iso", 0, 0, stack_index=2)
+        assert data["stack_index"] == 2
+
+    def test_offsets_are_zero(self, plane_out):
+        """extract_line profiles have no ring-axis offset (it is a synthetic line)."""
+        field = load_field(plane_out)
+        data = field.extract_line("iso", 0, 0)
+        assert np.all(data["offsets"] == 0.0)
+

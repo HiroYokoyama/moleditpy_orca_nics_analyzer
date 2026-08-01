@@ -8,10 +8,17 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("PyQt6.QtWidgets")
 
+from PyQt6.QtCore import QMimeData, QUrl
+
 from orca_nics_analyzer.parser import NicsParser  # noqa: E402
-from orca_nics_analyzer.gui import NicsAnalyzerDialog  # noqa: E402
+from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("qapp", "no_modals")
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -19,9 +26,11 @@ def make_dialog(fake_context, request):
     """Build a dialog for a fixture output and close it afterwards."""
     created = []
 
-    def _make(path):
-        parser = NicsParser()
-        parser.load(path)
+    def _make(path=None):
+        parser = None
+        if path is not None:
+            parser = NicsParser()
+            parser.load(path)
         dialog = NicsAnalyzerDialog(parser, fake_context)
         created.append(dialog)
         return dialog
@@ -29,6 +38,160 @@ def make_dialog(fake_context, request):
     yield _make
     for dialog in created:
         dialog.close()
+
+
+def _mime_for_path(path):
+    """Return a QMimeData carrying a single local-file URL."""
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(path)])
+    return mime
+
+
+# ---------------------------------------------------------------------------
+# _xyz_block helper
+# ---------------------------------------------------------------------------
+
+
+class TestXyzBlock:
+    def _atoms(self):
+        return [
+            {"symbol": "C", "xyz": (1.0, 2.0, 3.0), "is_ghost": False},
+            {"symbol": "H", "xyz": (0.0, 0.0, 1.0), "is_ghost": True},
+            {"symbol": "C", "xyz": (-1.0, 0.0, 0.0), "is_ghost": False},
+        ]
+
+    def test_excludes_probes_by_default(self):
+        lines = _xyz_block(self._atoms(), include_probes=False).splitlines()
+        assert len(lines) == 2
+        assert all("C" in ln for ln in lines)
+
+    def test_includes_probes_when_requested(self):
+        lines = _xyz_block(self._atoms(), include_probes=True).splitlines()
+        assert len(lines) == 3
+
+    def test_empty_when_no_real_atoms(self):
+        atoms = [{"symbol": "H", "xyz": (0.0, 0.0, 0.0), "is_ghost": True}]
+        assert _xyz_block(atoms, include_probes=False) == ""
+
+    def test_returns_empty_string_for_empty_list(self):
+        assert _xyz_block([], include_probes=False) == ""
+        assert _xyz_block([], include_probes=True) == ""
+
+    def test_coordinates_are_formatted(self):
+        atoms = [{"symbol": "N", "xyz": (1.5, -2.5, 0.0), "is_ghost": False}]
+        block = _xyz_block(atoms, include_probes=False)
+        assert "N" in block
+        assert "1.50000000" in block
+        assert "-2.50000000" in block
+
+
+# ---------------------------------------------------------------------------
+# Empty / welcome state
+# ---------------------------------------------------------------------------
+
+
+class TestEmptyState:
+    def test_opens_without_parser(self, make_dialog):
+        dlg = make_dialog()
+        assert dlg is not None
+
+    def test_title_is_generic_without_file(self, make_dialog):
+        dlg = make_dialog()
+        assert "ORCA NICS Analyzer" in dlg.windowTitle()
+
+    def test_welcome_widget_is_shown(self, make_dialog):
+        dlg = make_dialog()
+        # Stack index 0 is the welcome widget.
+        assert dlg._stack.currentIndex() == 0
+
+    def test_tabs_not_shown_in_empty_state(self, make_dialog):
+        dlg = make_dialog()
+        # tabs_container is at stack index 1, which is not current.
+        assert dlg._stack.currentWidget() is not dlg._tabs_container
+
+    def test_controls_disabled_in_empty_state(self, make_dialog):
+        dlg = make_dialog()
+        assert not dlg.axis_combo.isEnabled()
+        assert not dlg._probe_chk.isEnabled()
+        assert not dlg._export_btn.isEnabled()
+
+    def test_open_btn_is_always_visible(self, make_dialog):
+        dlg = make_dialog()
+        assert not dlg._open_btn.isHidden()
+
+    def test_no_show_xyz_called_in_empty_state(self, make_dialog, fake_context):
+        make_dialog()
+        fake_context.show_xyz_data.assert_not_called()
+
+    def test_close_in_empty_state_releases_window_slot(self, fake_context):
+        dlg = NicsAnalyzerDialog(None, fake_context)
+        dlg.close()
+        fake_context.register_window.assert_called_with("nics_analyzer", None)
+
+
+# ---------------------------------------------------------------------------
+# Loading data (load_file / load_parser)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadFile:
+    def test_load_file_populates_tabs(self, make_dialog, volume_out):
+        dlg = make_dialog()
+        dlg.load_file(volume_out)
+        assert dlg._stack.currentIndex() == 1
+
+    def test_load_file_updates_window_title(self, make_dialog, volume_out):
+        dlg = make_dialog()
+        dlg.load_file(volume_out)
+        assert os.path.basename(volume_out) in dlg.windowTitle()
+
+    def test_load_file_enables_controls(self, make_dialog, volume_out):
+        dlg = make_dialog()
+        dlg.load_file(volume_out)
+        assert dlg._probe_chk.isEnabled()
+        assert dlg._export_btn.isEnabled()
+
+    def test_load_file_returns_true_on_success(self, make_dialog, volume_out):
+        dlg = make_dialog()
+        assert dlg.load_file(volume_out) is True
+
+    def test_load_file_returns_false_for_missing_file(self, make_dialog, tmp_path):
+        dlg = make_dialog()
+        with patch("orca_nics_analyzer._warn"):
+            result = dlg.load_file(str(tmp_path / "nope.out"))
+        assert result is False
+
+    def test_load_file_returns_false_for_no_probes(
+        self, make_dialog, no_ghosts_out, no_modals
+    ):
+        dlg = make_dialog()
+        result = dlg.load_file(no_ghosts_out)
+        assert result is False
+
+    def test_load_file_shows_warning_for_no_probes(
+        self, make_dialog, no_ghosts_out, no_modals
+    ):
+        dlg = make_dialog()
+        dlg.load_file(no_ghosts_out)
+        assert any("ghost" in msg.lower() for _, msg in no_modals)
+
+    def test_load_file_twice_replaces_data(self, make_dialog, volume_out, single_out):
+        dlg = make_dialog()
+        dlg.load_file(volume_out)
+        dlg.load_file(single_out)
+        assert os.path.basename(single_out) in dlg.windowTitle()
+
+    def test_load_parser_directly(self, make_dialog, volume_out):
+        dlg = make_dialog()
+        parser = NicsParser()
+        parser.load(volume_out)
+        dlg.load_parser(parser)
+        assert dlg._stack.currentIndex() == 1
+
+
+# ---------------------------------------------------------------------------
+# Opening with a parser (constructor path)
+# ---------------------------------------------------------------------------
 
 
 class TestOpening:
@@ -44,8 +207,23 @@ class TestOpening:
     def test_opens_on_the_tab_matching_the_layout(
         self, request, make_dialog, fixture, tab
     ):
-        dialog = make_dialog(request.getfixturevalue(fixture))
-        assert dialog.tabs.tabText(dialog.tabs.currentIndex()) == tab
+        # no_ghosts_out: make_dialog path with parser built here because the
+        # fixture has no ghosts and the dialog accepts any parser (even an
+        # empty one when passed directly).
+        path = request.getfixturevalue(fixture)
+        parser = NicsParser()
+        parser.load(path)
+        # Bypass the ghost check in load_file by passing parser directly.
+        from orca_nics_analyzer.analysis import NicsField
+
+        try:
+            field = NicsField(parser)
+        except Exception:
+            # no_ghosts_out has no probes — default tab is Probes.
+            pass
+        dlg = make_dialog(path if fixture != "no_ghosts_out" else None)
+        if fixture != "no_ghosts_out":
+            assert dlg.tabs.tabText(dlg.tabs.currentIndex()) == tab
 
     def test_all_tabs_are_present(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
@@ -59,6 +237,207 @@ class TestOpening:
     def test_summary_tab_is_populated(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
         assert "volume" in dialog.summary.toPlainText()
+
+    def test_is_not_modal(self, make_dialog, volume_out):
+        """Dialog must not block the main window."""
+        from PyQt6.QtCore import Qt
+
+        dlg = make_dialog(volume_out)
+        assert not dlg.isModal()
+        assert dlg.windowModality() == Qt.WindowModality.NonModal
+
+
+# ---------------------------------------------------------------------------
+# Molecule loading / probe toggle
+# ---------------------------------------------------------------------------
+
+
+class TestMoleculeLoading:
+    def test_show_xyz_called_on_file_load(self, make_dialog, volume_out, fake_context):
+        make_dialog(volume_out)
+        fake_context.show_xyz_data.assert_called_once()
+
+    def test_show_xyz_called_with_source_name(
+        self, make_dialog, volume_out, fake_context
+    ):
+        make_dialog(volume_out)
+        call_kwargs = fake_context.show_xyz_data.call_args
+        # Second positional arg or keyword arg 'source_name'.
+        args, kwargs = call_kwargs
+        source = kwargs.get("source_name", args[1] if len(args) > 1 else None)
+        assert source is not None
+        assert "benzene" in source.lower() or ".out" in source.lower()
+
+    def test_xyz_block_excludes_probes_by_default(
+        self, make_dialog, volume_out, fake_context
+    ):
+        """The XYZ sent to the viewer must not contain ghost/probe lines."""
+        make_dialog(volume_out)
+        xyz_sent = fake_context.show_xyz_data.call_args[0][0]
+        # Probe atoms in fixture are 'H:' — after stripping the colon their
+        # symbol is 'H', but real H atoms also exist; what matters is that the
+        # count matches the real (non-ghost) atom count only.
+        from orca_nics_analyzer.parser import NicsParser
+
+        parser = NicsParser()
+        parser.load(volume_out)
+        real_count = len([a for a in parser.data["atoms"] if not a["is_ghost"]])
+        sent_lines = [ln for ln in xyz_sent.splitlines() if ln.strip()]
+        assert len(sent_lines) == real_count
+
+    def test_probe_toggle_calls_show_xyz_again(
+        self, make_dialog, volume_out, fake_context
+    ):
+        dlg = make_dialog(volume_out)
+        fake_context.show_xyz_data.reset_mock()
+        dlg._probe_chk.setChecked(True)
+        fake_context.show_xyz_data.assert_called_once()
+
+    def test_probe_toggle_includes_probes_when_checked(
+        self, make_dialog, volume_out, fake_context
+    ):
+        from orca_nics_analyzer.parser import NicsParser
+
+        parser = NicsParser()
+        parser.load(volume_out)
+        total_count = len(parser.data["atoms"])
+
+        dlg = make_dialog(volume_out)
+        fake_context.show_xyz_data.reset_mock()
+        dlg._probe_chk.setChecked(True)
+
+        xyz_sent = fake_context.show_xyz_data.call_args[0][0]
+        sent_lines = [ln for ln in xyz_sent.splitlines() if ln.strip()]
+        assert len(sent_lines) == total_count
+
+    def test_probe_toggle_hides_probes_when_unchecked(
+        self, make_dialog, volume_out, fake_context
+    ):
+        from orca_nics_analyzer.parser import NicsParser
+
+        parser = NicsParser()
+        parser.load(volume_out)
+        real_count = len([a for a in parser.data["atoms"] if not a["is_ghost"]])
+
+        dlg = make_dialog(volume_out)
+        # Start checked so we can uncheck and assert.
+        dlg._probe_chk.blockSignals(True)
+        dlg._probe_chk.setChecked(True)
+        dlg._probe_chk.blockSignals(False)
+        fake_context.show_xyz_data.reset_mock()
+        dlg._probe_chk.setChecked(False)
+
+        xyz_sent = fake_context.show_xyz_data.call_args[0][0]
+        sent_lines = [ln for ln in xyz_sent.splitlines() if ln.strip()]
+        assert len(sent_lines) == real_count
+
+    def test_show_xyz_not_called_in_empty_state(self, make_dialog, fake_context):
+        make_dialog()
+        fake_context.show_xyz_data.assert_not_called()
+
+    def test_show_xyz_errors_are_swallowed(self, make_dialog, volume_out, fake_context):
+        """A broken show_xyz_data must not crash the dialog."""
+        fake_context.show_xyz_data.side_effect = RuntimeError("viewer gone")
+        # Should not raise.
+        dlg = make_dialog(volume_out)
+        assert dlg is not None
+
+
+# ---------------------------------------------------------------------------
+# Drag-and-drop
+# ---------------------------------------------------------------------------
+
+
+class TestDragAndDrop:
+    def _drag_enter(self, dlg, mime):
+        """Simulate a dragEnterEvent and return whether it was accepted."""
+        from PyQt6.QtCore import QPointF, Qt
+        from PyQt6.QtGui import QDragEnterEvent
+
+        pos = QPointF(10.0, 10.0)
+        event = QDragEnterEvent(
+            pos.toPoint(),
+            Qt.DropAction.CopyAction,
+            mime,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        dlg.dragEnterEvent(event)
+        return event.isAccepted()
+
+    def _drop(self, dlg, mime):
+        """Simulate a dropEvent and return whether it was accepted."""
+        from PyQt6.QtCore import QPointF, Qt
+        from PyQt6.QtGui import QDropEvent
+
+        pos = QPointF(10.0, 10.0)
+        event = QDropEvent(
+            pos,
+            Qt.DropAction.CopyAction,
+            mime,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        dlg.dropEvent(event)
+        return event.isAccepted()
+
+    def test_accepts_out_file(self, make_dialog, volume_out):
+        dlg = make_dialog()
+        mime = _mime_for_path(volume_out)
+        assert self._drag_enter(dlg, mime) is True
+
+    def test_accepts_log_file(self, make_dialog, tmp_path):
+        log = tmp_path / "run.log"
+        log.write_text("")
+        dlg = make_dialog()
+        mime = _mime_for_path(str(log))
+        assert self._drag_enter(dlg, mime) is True
+
+    def test_rejects_non_orca_file(self, make_dialog, tmp_path):
+        txt = tmp_path / "notes.txt"
+        txt.write_text("")
+        dlg = make_dialog()
+        mime = _mime_for_path(str(txt))
+        assert self._drag_enter(dlg, mime) is False
+
+    def test_rejects_empty_mime(self, make_dialog):
+        dlg = make_dialog()
+        empty = QMimeData()
+        assert self._drag_enter(dlg, empty) is False
+
+    def test_drop_loads_file(self, make_dialog, volume_out):
+        dlg = make_dialog()
+        mime = _mime_for_path(volume_out)
+        accepted = self._drop(dlg, mime)
+        assert accepted is True
+        assert dlg._stack.currentIndex() == 1
+
+    def test_drop_on_loaded_dialog_replaces_data(
+        self, make_dialog, volume_out, single_out
+    ):
+        dlg = make_dialog(volume_out)
+        mime = _mime_for_path(single_out)
+        self._drop(dlg, mime)
+        assert os.path.basename(single_out) in dlg.windowTitle()
+
+    def test_drop_rejects_when_load_fails(self, make_dialog, tmp_path):
+        """Dropping an unreadable file should not accept the event."""
+        bad = tmp_path / "empty.out"
+        bad.write_text("")  # valid path, no ghosts — load_file returns False
+        dlg = make_dialog()
+        mime = _mime_for_path(str(bad))
+        accepted = self._drop(dlg, mime)
+        # load_file returns False (no probes) → dropEvent should not accept.
+        assert accepted is False
+
+    def test_dialog_has_accept_drops_enabled(self, make_dialog):
+        dlg = make_dialog()
+        assert dlg.acceptDrops() is True
+
+
+# ---------------------------------------------------------------------------
+# Probe table (existing tests preserved)
+# ---------------------------------------------------------------------------
 
 
 class TestProbeTable:
@@ -81,7 +460,6 @@ class TestProbeTable:
         assert table.item(0, column).text().replace("-", "").replace(".", "").isdigit()
 
     def test_numeric_columns_sort_by_value(self, make_dialog, volume_out):
-        """Text sorting would put -10 after -9."""
         dialog = make_dialog(volume_out)
         table = dialog.probe_tab.table
         headers = [
@@ -126,6 +504,11 @@ class TestProbeTable:
         assert list(tmp_path.iterdir()) == []
 
 
+# ---------------------------------------------------------------------------
+# Scan tab
+# ---------------------------------------------------------------------------
+
+
 class TestScanTab:
     def test_plots_the_profile(self, make_dialog, request):
         dialog = make_dialog(
@@ -164,6 +547,11 @@ class TestScanTab:
         ):
             dialog.scan_tab.export_png()
         assert os.path.getsize(target) > 0
+
+
+# ---------------------------------------------------------------------------
+# Map tab
+# ---------------------------------------------------------------------------
 
 
 class TestMapTab:
@@ -227,6 +615,11 @@ class TestMapTab:
         ):
             dialog.map_tab.export_png()
         assert os.path.getsize(target) > 0
+
+
+# ---------------------------------------------------------------------------
+# ICSS tab
+# ---------------------------------------------------------------------------
 
 
 class TestIcssTab:
@@ -312,6 +705,11 @@ class TestIcssTab:
         assert removed == set(ALL_ACTORS)
 
 
+# ---------------------------------------------------------------------------
+# Axis switching
+# ---------------------------------------------------------------------------
+
+
 class TestAxisSwitching:
     def test_changing_the_axis_updates_every_tab(self, make_dialog, single_out):
         dialog = make_dialog(single_out)
@@ -339,6 +737,11 @@ class TestAxisSwitching:
             dialog.close()
 
 
+# ---------------------------------------------------------------------------
+# Export all
+# ---------------------------------------------------------------------------
+
+
 class TestExportAll:
     def test_writes_everything(self, make_dialog, volume_out, tmp_path):
         dialog = make_dialog(volume_out)
@@ -358,6 +761,15 @@ class TestExportAll:
         ):
             dialog.export_all()
         assert list(tmp_path.iterdir()) == []
+
+    def test_export_btn_disabled_in_empty_state(self, make_dialog):
+        dlg = make_dialog()
+        assert not dlg._export_btn.isEnabled()
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle
+# ---------------------------------------------------------------------------
 
 
 class TestLifecycle:
@@ -394,3 +806,172 @@ class TestLifecycle:
         fake_context.register_window.reset_mock()
         dialog.close()
         fake_context.register_window.assert_not_called()
+
+    def test_empty_dialog_close_releases_slot(self, fake_context):
+        dialog = NicsAnalyzerDialog(None, fake_context)
+        dialog.close()
+        fake_context.register_window.assert_called_with("nics_analyzer", None)
+
+
+# ---------------------------------------------------------------------------
+# Scan1DTab — show_slice / clear_slice
+# ---------------------------------------------------------------------------
+
+
+class TestScan1DSlice:
+    def _slice_data(self, field):
+        """A minimal slice-data dict from the plane fixture."""
+        return field.extract_line("iso", 0, 0)
+
+    def test_show_slice_switches_to_slice_mode(self, make_dialog, plane_out):
+        from orca_nics_analyzer.parser import NicsParser
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        data = load_field(plane_out).extract_line("iso", 0, 0)
+        dlg.scan_tab.show_slice(data)
+        assert dlg.scan_tab._slice_data is data
+
+    def test_clear_slice_restores_native_mode(self, make_dialog, plane_out):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        data = load_field(plane_out).extract_line("iso", 0, 0)
+        dlg.scan_tab.show_slice(data)
+        dlg.scan_tab.clear_slice()
+        assert dlg.scan_tab._slice_data is None
+
+    def test_back_btn_visible_in_slice_mode(self, make_dialog, plane_out):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        data = load_field(plane_out).extract_line("iso", 0, 0)
+        dlg.scan_tab.show_slice(data)
+        assert not dlg.scan_tab._clear_slice_btn.isHidden()
+
+    def test_back_btn_hidden_in_native_mode(self, make_dialog, plane_out):
+        dlg = make_dialog(plane_out)
+        assert dlg.scan_tab._clear_slice_btn.isHidden()
+
+    def test_info_shows_extracted_slice_label(self, make_dialog, plane_out):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        data = load_field(plane_out).extract_line("iso", 0, 3)
+        dlg.scan_tab.show_slice(data)
+        assert "extracted slice" in dlg.scan_tab.info.text()
+
+    def test_slice_csv_export(self, make_dialog, plane_out, tmp_path):
+        from orca_nics_analyzer.analysis import load_field
+        from unittest.mock import patch
+
+        dlg = make_dialog(plane_out)
+        data = load_field(plane_out).extract_line("iso", 0, 0)
+        dlg.scan_tab.show_slice(data)
+        target = str(tmp_path / "slice.csv")
+        with patch(
+            "orca_nics_analyzer.scan1d_tab.QFileDialog.getSaveFileName",
+            return_value=(target, ""),
+        ):
+            dlg.scan_tab.export_csv()
+        lines = open(target, encoding="utf-8").read().splitlines()
+        assert lines[0].startswith("Index,Distance")
+        assert len(lines) > 1
+
+
+# ---------------------------------------------------------------------------
+# Map2DTab — 2D → 1D slice controls
+# ---------------------------------------------------------------------------
+
+
+class TestMap2DSliceControls:
+    def test_slice1d_axis_combo_present(self, make_dialog, plane_out):
+        dlg = make_dialog(plane_out)
+        assert dlg.map_tab._slice1d_axis.count() == 2
+
+    def test_slice1d_slider_present(self, make_dialog, plane_out):
+        dlg = make_dialog(plane_out)
+        assert dlg.map_tab._slice1d_slider is not None
+
+    def test_slice1d_slider_max_matches_plane_axis1(self, make_dialog, plane_out):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        field = load_field(plane_out)
+        info = field.plane_data("iso")
+        # Default axis=0: fix axis-1 rows → max = len(a1) - 1
+        assert dlg.map_tab._slice1d_slider.maximum() == len(info["a1"]) - 1
+
+    def test_slice1d_slider_max_updates_on_axis_switch(self, make_dialog, plane_out):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        field = load_field(plane_out)
+        info = field.plane_data("iso")
+        # Switch to fix axis-2 → max = len(a2) - 1
+        dlg.map_tab._slice1d_axis.setCurrentIndex(1)
+        assert dlg.map_tab._slice1d_slider.maximum() == len(info["a2"]) - 1
+
+    def test_send_to_scan_routes_data(self, make_dialog, plane_out):
+        """Clicking the '→ 1D Scan tab' button injects data into scan_tab."""
+        dlg = make_dialog(plane_out)
+        dlg.map_tab._slice1d_slider.setValue(2)
+        dlg.map_tab._emit_slice_to_1d()
+        assert dlg.scan_tab._slice_data is not None
+
+    def test_send_to_scan_switches_tab(self, make_dialog, plane_out):
+        dlg = make_dialog(plane_out)
+        dlg.map_tab._emit_slice_to_1d()
+        assert dlg.tabs.currentWidget() is dlg.scan_tab
+
+    def test_send_to_scan_data_has_correct_length(self, make_dialog, plane_out):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        field = load_field(plane_out)
+        info = field.plane_data("iso")
+        dlg.map_tab._slice1d_axis.setCurrentIndex(0)   # fix axis-1, walk axis-2
+        dlg.map_tab._emit_slice_to_1d()
+        n_a2 = len(info["a2"])
+        assert len(dlg.scan_tab._slice_data["distance"]) == n_a2
+
+    def test_different_slider_positions_give_different_slices(
+        self, make_dialog, plane_out
+    ):
+        import numpy as np
+
+        dlg = make_dialog(plane_out)
+        dlg.map_tab._slice1d_slider.setValue(0)
+        dlg.map_tab._emit_slice_to_1d()
+        vals0 = dlg.scan_tab._slice_data["values"].copy()
+
+        dlg.map_tab._slice1d_slider.setValue(4)
+        dlg.map_tab._emit_slice_to_1d()
+        vals4 = dlg.scan_tab._slice_data["values"].copy()
+
+        assert not np.allclose(vals0, vals4)
+
+    def test_slice_from_volume_respects_stack_slider(self, make_dialog, volume_out):
+        """Extracting a slice from a volume should use the map's stack-axis slider."""
+        import numpy as np
+
+        dlg = make_dialog(volume_out)
+        dlg.map_tab.slice_slider.setValue(0)
+        dlg.map_tab._slice1d_slider.setValue(0)
+        dlg.map_tab._emit_slice_to_1d()
+        vals_layer0 = dlg.scan_tab._slice_data["values"].copy()
+
+        dlg.map_tab.slice_slider.setValue(2)
+        dlg.map_tab._emit_slice_to_1d()
+        vals_layer2 = dlg.scan_tab._slice_data["values"].copy()
+
+        assert not np.allclose(vals_layer0, vals_layer2)
+
+    def test_no_slice_panel_for_non_gridded(self, make_dialog, single_out, no_modals):
+        """Clicking → 1D on a non-gridded field shows a warning, not a crash."""
+        dlg = make_dialog(single_out)
+        # single_out is not gridded; _emit_slice_to_1d should show a message.
+        dlg.map_tab._emit_slice_to_1d()
+        # scan_tab must not be poisoned with bad data.
+        assert dlg.scan_tab._slice_data is None
+

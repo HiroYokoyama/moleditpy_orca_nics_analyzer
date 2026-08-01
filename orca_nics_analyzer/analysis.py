@@ -239,6 +239,75 @@ class NicsField:
         info["slice_index"] = index
         return info
 
+    def extract_line(self, component, fixed_in_plane_axis, fixed_index, stack_index=None):
+        """Extract a 1D profile from a 2D plane or one layer of a 3D volume.
+
+        Slices the in-plane 2D grid by fixing one in-plane coordinate and
+        returning all values along the other.
+
+        Args:
+            component: ``"iso"`` or ``"zz"``.
+            fixed_in_plane_axis: ``0`` to fix an axis-1 row and walk axis-2,
+                or ``1`` to fix an axis-2 column and walk axis-1.
+            fixed_index: Integer index of the row/column to fix.
+            stack_index: For a 3D volume, which stack-axis layer to use.
+                Defaults to the middle layer when ``None``.
+
+        Returns:
+            dict with keys compatible with :meth:`line_data` (``distance``,
+            ``label``, ``axis``, ``iso``, ``zz``, ``values``, ``indices``,
+            ``order``, ``offsets``), plus extra ``source``/``fixed_*``
+            metadata for round-trip identification.
+
+        Raises:
+            ValueError: if the field is not a regular grid.
+        """
+        if not self.is_gridded:
+            raise ValueError("probe layout is not a regular grid")
+
+        base = self.plane_data(component)
+        si = stack_index if stack_index is not None else base["slice_index"]
+        info = self.plane_slice(component, si)
+
+        values_2d = info["values"]   # shape (n_a1, n_a2)
+        a1 = info["a1"]
+        a2 = info["a2"]
+
+        # fixed_in_plane_axis == 0  → fix a row along a1, walk a2
+        # fixed_in_plane_axis == 1  → fix a column along a2, walk a1
+        if fixed_in_plane_axis == 0:
+            row = max(0, min(int(fixed_index), len(a1) - 1))
+            profile = values_2d[row, :]
+            distance = np.asarray(a2, dtype=float)
+            walk_axis = info["axis2"]
+            label = f"in-plane axis-2 / Å  (axis-1 row {row})"
+        else:
+            col = max(0, min(int(fixed_index), len(a2) - 1))
+            profile = values_2d[:, col]
+            distance = np.asarray(a1, dtype=float)
+            walk_axis = info["axis1"]
+            label = f"in-plane axis-1 / Å  (axis-2 col {col})"
+
+        n = len(distance)
+        nan_arr = np.full(n, np.nan)
+        return {
+            "distance": distance,
+            "label": label,
+            "axis": walk_axis,
+            "iso": profile if component == "iso" else nan_arr,
+            "zz": profile if component == "zz" else nan_arr,
+            "values": profile,
+            "indices": list(range(n)),
+            "order": info["order"],
+            "offsets": np.zeros(n, dtype=float),
+            # Extra metadata for callers.
+            "source": "extract_line",
+            "fixed_in_plane_axis": int(fixed_in_plane_axis),
+            "fixed_index": int(fixed_index),
+            "stack_index": int(info["slice_index"]),
+            "component": component,
+        }
+
     # -- 1D scan ---------------------------------------------------------
     @property
     def is_scan(self):

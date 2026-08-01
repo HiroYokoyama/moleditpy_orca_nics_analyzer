@@ -14,7 +14,7 @@ import logging
 import os
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.2.0"
+PLUGIN_VERSION = "0.3.0"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
@@ -55,7 +55,11 @@ def _warn(parent, title, text):
 
 
 def _open_file(path, context):
-    """Parse an ORCA output and show the analyzer window for it."""
+    """Parse an ORCA output and load its data into the analyzer window.
+
+    If the window is already open (empty or from a previous file) the existing
+    dialog is reused; otherwise a new one is created.
+    """
     mw = context.get_main_window()
     content = _read_output_file(path, mw)
     if content is None:
@@ -81,9 +85,13 @@ def _open_file(path, context):
     existing = context.get_window("nics_analyzer")
     if existing is not None:
         try:
-            existing.close()
+            # Reuse the existing dialog — just swap in the new data.
+            existing.load_parser(parser)
+            existing.raise_()
+            existing.activateWindow()
+            return
         except (RuntimeError, AttributeError) as e:
-            logging.warning("[orca_nics_analyzer] closing previous window: %s", e)
+            logging.warning("[orca_nics_analyzer] reusing previous window: %s", e)
 
     from .gui import NicsAnalyzerDialog
 
@@ -100,17 +108,24 @@ def initialize(context):
     _context = context
 
     def open_dialog():
-        from PyQt6.QtWidgets import QFileDialog
+        """Open the analyzer window; let the user pick a file inside it."""
+        existing = context.get_window("nics_analyzer")
+        if existing is not None:
+            try:
+                existing.raise_()
+                existing.activateWindow()
+                return
+            except (RuntimeError, AttributeError):
+                pass
 
         mw = context.get_main_window()
-        path, _ = QFileDialog.getOpenFileName(
-            mw,
-            "Open ORCA Output with NICS Data",
-            "",
-            "ORCA Output (*.out *.log);;All Files (*)",
-        )
-        if path:
-            _open_file(path, context)
+        from .gui import NicsAnalyzerDialog
+
+        dlg = NicsAnalyzerDialog(None, context, parent=mw)
+        context.register_window("nics_analyzer", dlg)
+        global _dialog_opened
+        _dialog_opened = True
+        dlg.show()
 
     context.add_menu_action("Analysis/ORCA NICS Analyzer...", open_dialog)
 
