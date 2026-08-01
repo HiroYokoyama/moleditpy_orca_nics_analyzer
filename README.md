@@ -87,10 +87,40 @@ carried through as-is rather than resampled onto a lab box.
 
 ## Development
 
+Install the development/test dependencies in a virtual environment:
+
 ```bash
-python -m pytest tests/ -v                     # full test suite
-python -m pytest tests/ --cov=orca_nics_analyzer --cov-report=term-missing
-python tests/make_fixtures.py                  # regenerate the sample outputs
+python -m pip install pytest pytest-cov numpy matplotlib PyQt6 pyvista
+```
+
+`PyQt6`, `matplotlib` and `pyvista` are required for the complete GUI suite; the
+parser, analysis and cube I/O tests also run in a minimal environment with only
+`pytest` and `numpy`. On Linux CI, the Qt/VTK runtime additionally needs the
+standard X11/EGL libraries listed in `.github/workflows/tests.yml`.
+
+Run the full suite and coverage report with the same command used by CI:
+
+```bash
+python -m pytest tests/ -v --tb=short --cov=orca_nics_analyzer --cov-report=term-missing
+```
+
+For a quick dependency-free check:
+
+```bash
+python -m pytest tests/test_parser.py tests/test_nics_math.py tests/test_cube_io.py tests/test_analysis.py tests/test_metadata.py -v --tb=short
+```
+
+Formatting and lint checks (when Ruff is installed):
+
+```bash
+ruff format --check .
+ruff check .
+```
+
+Regenerate the sample outputs with:
+
+```bash
+python tests/make_fixtures.py
 ```
 
 Test fixtures are synthetic ORCA outputs in exact ORCA 5 layout whose shieldings
