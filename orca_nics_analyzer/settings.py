@@ -9,6 +9,7 @@ SETTINGS_KEY = "nics_analyzer_settings"
 
 DEFAULT_SETTINGS = {
     "axis_mode": "grid",
+    "axis_vector": [0.0, 0.0, 1.0],
     "show_probes": False,
     "map_component": "zz",
     "map_colormap": "seismic",
@@ -26,6 +27,7 @@ DEFAULT_SETTINGS = {
     "icss_positive": True,
     "icss_negative": True,
     "icss_cut_axis": False,
+    "icss_show_vector": False,
 }
 
 

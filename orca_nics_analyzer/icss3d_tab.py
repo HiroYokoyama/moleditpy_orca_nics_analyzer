@@ -37,12 +37,14 @@ ACTOR_NEGATIVE = "nics_icss_negative"
 ACTOR_PLANE = "nics_map_plane"
 ACTOR_CUT_AXIS = "nics_cut_axis"
 ACTOR_CUT_AXIS_EDGE = "nics_cut_axis_edge"
+ACTOR_AXIS_VECTOR = "nics_zz_axis_vector"
 ALL_ACTORS = (
     ACTOR_POSITIVE,
     ACTOR_NEGATIVE,
     ACTOR_PLANE,
     ACTOR_CUT_AXIS,
     ACTOR_CUT_AXIS_EDGE,
+    ACTOR_AXIS_VECTOR,
 )
 
 
@@ -197,6 +199,10 @@ class Icss3DTab(QWidget):
         self.show_cut_axis.setChecked(False)
         self.show_cut_axis.toggled.connect(self._maybe_draw)
         s2d.addWidget(self.show_cut_axis)
+        self.show_vector = QCheckBox("Show NICS_zz vector")
+        self.show_vector.setChecked(False)
+        self.show_vector.toggled.connect(self._maybe_draw)
+        s2d.addWidget(self.show_vector)
 
         self.goto_2d_btn = QPushButton("→ 2D Map tab")
         self.goto_2d_btn.setToolTip("Switch to the 2D Map tab to view this slice.")
@@ -469,6 +475,7 @@ class Icss3DTab(QWidget):
             drawn += 1
 
         self.update_cut_axis_preview()
+        self.update_axis_vector()
 
         plotter.render()
         if drawn == 0:
@@ -480,6 +487,47 @@ class Icss3DTab(QWidget):
                 f"Drew {drawn} isosurface(s) at +/-{level:.2f} ppm "
                 f"on a {'x'.join(str(n) for n in cube.shape)} grid."
             )
+
+    def update_axis_vector(self, *_):
+        """Show the selected NICS_zz direction as an arrow in the 3D view."""
+        if pv is None:
+            return
+        plotter = self._plotter()
+        if plotter is None:
+            return
+        self._remove(plotter, ACTOR_AXIS_VECTOR)
+        if (
+            not self.show_vector.isChecked()
+            or self.field.layout.get("kind") != "volume"
+        ):
+            return
+        if not self.field.probes:
+            return
+        axis = np.asarray(self.field.axis_for(self.field.probes[0]), dtype=float)
+        norm = np.linalg.norm(axis)
+        if not np.isfinite(norm) or norm < 1e-12:
+            return
+        axis = axis / norm
+        origin = (
+            np.mean(self.field.real_coords, axis=0)
+            if len(self.field.real_coords)
+            else np.mean(self.field.probe_coords, axis=0)
+        )
+        coords = self.field.layout.get("coords", ())
+        spans = [float(values[-1] - values[0]) for values in coords if len(values) > 1]
+        scale = max(spans, default=2.0) * 0.35
+        arrow = pv.Arrow(
+            start=origin - axis * scale * 0.5,
+            direction=axis,
+            scale=scale,
+        )
+        plotter.add_mesh(
+            arrow,
+            color="#f0c419",
+            name=ACTOR_AXIS_VECTOR,
+            show_scalar_bar=False,
+        )
+        self._actors.add(ACTOR_AXIS_VECTOR)
 
     def update_cut_axis_preview(self, *_):
         """Update the arrow showing the current slice axis for 3D volumes."""

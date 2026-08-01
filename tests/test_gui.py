@@ -1,5 +1,6 @@
 """GUI tests with a real offscreen Qt, a mocked host plotter and no modals."""
 
+import json
 import os
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,7 @@ from PyQt6.QtWidgets import QPushButton  # noqa: E402
 
 from orca_nics_analyzer.parser import NicsParser  # noqa: E402
 from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block  # noqa: E402
+from orca_nics_analyzer.icss3d_tab import ACTOR_AXIS_VECTOR  # noqa: E402
 from orca_nics_analyzer.icss3d_tab import ACTOR_NEGATIVE, ACTOR_POSITIVE  # noqa: E402
 
 pytestmark = pytest.mark.usefixtures("qapp", "no_modals")
@@ -921,6 +923,25 @@ class TestIcssTab:
         assert ACTOR_POSITIVE not in names
         assert ACTOR_NEGATIVE not in names
 
+    def test_show_vector_adds_named_3d_actor(
+        self, make_dialog, volume_out, fake_plotter
+    ):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.tabs.setCurrentWidget(dialog.icss_tab)
+        dialog.icss_tab.show_vector.setChecked(True)
+        names = {
+            call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list
+        }
+        assert ACTOR_AXIS_VECTOR in names
+
+    def test_clear_removes_vector_actor(self, make_dialog, volume_out, fake_plotter):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.icss_tab.show_vector.setChecked(True)
+        dialog.icss_tab.clear_actors()
+        assert ACTOR_AXIS_VECTOR not in dialog.icss_tab._actors
+
     def test_2d_tab_offers_3d_plane_button(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
         assert any(
@@ -1072,6 +1093,25 @@ class TestAxisSwitching:
         dialog.icss_tab.show_plane = MagicMock()
         dialog.axis_combo.setCurrentIndex(2)
         dialog.icss_tab.show_plane.assert_called()
+
+    def test_manual_axis_vector_updates_nics_zz(self, make_dialog, single_out):
+        dialog = make_dialog(single_out)
+        dialog.axis_combo.setCurrentIndex(dialog.axis_combo.findData("custom"))
+        dialog._axis_vector[0].setValue(1.0)
+        dialog._axis_vector[1].setValue(2.0)
+        dialog._axis_vector[2].setValue(3.0)
+        assert dialog.field.axis_mode == "custom"
+        assert dialog.field.custom_axis == pytest.approx((1.0, 2.0, 3.0))
+
+    def test_manual_axis_vector_is_saved(self, make_dialog, single_out, tmp_path):
+        dialog = make_dialog(single_out)
+        dialog.axis_combo.setCurrentIndex(dialog.axis_combo.findData("custom"))
+        dialog._axis_vector[0].setValue(1.0)
+        dialog._axis_vector[1].setValue(2.0)
+        dialog._axis_vector[2].setValue(3.0)
+        dialog.close()
+        saved = json.loads((tmp_path / "settings.json").read_text())
+        assert saved["nics_analyzer_settings"]["axis_vector"] == [1.0, 2.0, 3.0]
 
     def test_axis_is_disabled_without_tensors(
         self, make_dialog, single_out, monkeypatch

@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QDoubleSpinBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -32,6 +33,7 @@ AXIS_CHOICES = (
     ("Lab X", "x"),
     ("Lab Y", "y"),
     ("Lab Z", "z"),
+    ("Manual vector…", "custom"),
 )
 
 #: File extensions accepted for drag-and-drop.
@@ -138,6 +140,23 @@ class NicsAnalyzerDialog(QDialog):
         self.axis_combo.currentIndexChanged.connect(self._on_axis_changed)
         self.axis_combo.setEnabled(False)
         header.addWidget(self.axis_combo)
+
+        self._axis_vector_label = QLabel("Vector:")
+        header.addWidget(self._axis_vector_label)
+        self._axis_vector = []
+        for component in "xyz":
+            spin = QDoubleSpinBox()
+            spin.setRange(-1000.0, 1000.0)
+            spin.setDecimals(4)
+            spin.setSingleStep(0.1)
+            spin.setPrefix(f"{component}=")
+            spin.setValue(1.0 if component == "z" else 0.0)
+            spin.valueChanged.connect(self._on_axis_changed)
+            self._axis_vector.append(spin)
+            header.addWidget(spin)
+        self._axis_vector_label.setVisible(False)
+        for spin in self._axis_vector:
+            spin.setVisible(False)
 
         self._probe_chk = QCheckBox("Show probe atoms")
         self._probe_chk.setChecked(False)  # hidden by default
@@ -451,13 +470,26 @@ class NicsAnalyzerDialog(QDialog):
         axis_index = self.axis_combo.findData(settings["axis_mode"])
         self.axis_combo.blockSignals(True)
         self._probe_chk.blockSignals(True)
+        for spin in self._axis_vector:
+            spin.blockSignals(True)
         try:
+            vector = settings.get("axis_vector", [0.0, 0.0, 1.0])
+            if isinstance(vector, (list, tuple)) and len(vector) == 3:
+                for spin, value in zip(self._axis_vector, vector):
+                    spin.setValue(float(value))
             if axis_index >= 0 and self.axis_combo.isEnabled():
                 self.axis_combo.setCurrentIndex(axis_index)
+                self._set_axis_vector_visible(settings["axis_mode"] == "custom")
+                if self.field is not None:
+                    self.field.set_axis_mode(
+                        settings["axis_mode"], self._custom_axis_values()
+                    )
             self._probe_chk.setChecked(bool(settings["show_probes"]))
         finally:
             self.axis_combo.blockSignals(False)
             self._probe_chk.blockSignals(False)
+            for spin in self._axis_vector:
+                spin.blockSignals(False)
 
         self._set_combo_data(self.map_tab.component, settings["map_component"])
         self.map_tab.cmap.setCurrentText(settings["map_colormap"])
@@ -476,10 +508,12 @@ class NicsAnalyzerDialog(QDialog):
         self.icss_tab.show_positive.setChecked(bool(settings["icss_positive"]))
         self.icss_tab.show_negative.setChecked(bool(settings["icss_negative"]))
         self.icss_tab.show_cut_axis.setChecked(bool(settings["icss_cut_axis"]))
+        self.icss_tab.show_vector.setChecked(bool(settings["icss_show_vector"]))
 
     def _settings_values(self):
         return {
             "axis_mode": self.axis_combo.currentData(),
+            "axis_vector": list(self._custom_axis_values()),
             "show_probes": self._probe_chk.isChecked(),
             "map_component": self.map_tab.component.currentData(),
             "map_colormap": self.map_tab.cmap.currentText(),
@@ -497,6 +531,7 @@ class NicsAnalyzerDialog(QDialog):
             "icss_positive": self.icss_tab.show_positive.isChecked(),
             "icss_negative": self.icss_tab.show_negative.isChecked(),
             "icss_cut_axis": self.icss_tab.show_cut_axis.isChecked(),
+            "icss_show_vector": self.icss_tab.show_vector.isChecked(),
         }
 
     def _save_settings(self):
@@ -611,10 +646,26 @@ class NicsAnalyzerDialog(QDialog):
         elif hasattr(self, "scan_tab") and widget is self.scan_tab:
             self.scan_tab.refresh(force=True)
 
+    def _custom_axis_values(self):
+        return tuple(float(spin.value()) for spin in self._axis_vector)
+
+    def _set_axis_vector_visible(self, visible):
+        self._axis_vector_label.setVisible(visible)
+        for spin in self._axis_vector:
+            spin.setVisible(visible)
+
     def _on_axis_changed(self):
         if self.field is None:
             return
-        self.field.set_axis_mode(self.axis_combo.currentData())
+        mode = self.axis_combo.currentData()
+        self._set_axis_vector_visible(mode == "custom")
+        try:
+            self.field.set_axis_mode(
+                mode, self._custom_axis_values() if mode == "custom" else None
+            )
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return
         self.probe_tab.refresh()
         self.scan_tab.refresh(force=self.tabs.currentWidget() is self.scan_tab)
         self._refresh_map_if_visible()
