@@ -391,12 +391,12 @@ class Icss3DTab(QWidget):
                     "pyvista is not installed, so isosurfaces cannot be drawn.",
                 )
             return
-        if not self.field.is_gridded:
+        if self.field.layout.get("kind") != "volume":
             if not silent:
                 QMessageBox.information(
                     self,
                     "3D view",
-                    "Isosurfaces need a regular 3D grid of probes.\n"
+                    "Isosurfaces need a regular 3D volume of probes.\n"
                     f"The detected layout is '{self.field.layout['kind']}'.",
                 )
             return

@@ -752,6 +752,12 @@ class TestIcssTab:
         dialog.icss_tab.component.setCurrentIndex(1)
         assert "NICS_iso" in dialog.icss_tab.cache_label.text()
 
+    def test_planar_grid_does_not_enter_isosurface_renderer(
+        self, make_dialog, plane_out, fake_plotter
+    ):
+        pytest.importorskip("pyvista")
+        make_dialog(plane_out)
+        assert fake_plotter.add_mesh.call_count == 0
     def test_show_plane_in_3d(self, make_dialog, plane_out, fake_plotter):
         pytest.importorskip("pyvista")
         dialog = make_dialog(plane_out)
