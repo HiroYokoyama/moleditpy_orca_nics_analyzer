@@ -68,6 +68,8 @@ class TestXyzBlock:
     def test_includes_probes_when_requested(self):
         lines = _xyz_block(self._atoms(), include_probes=True).splitlines()
         assert len(lines) == 3
+        # Ghost atom 'H' should be mapped to 'X'
+        assert lines[1].startswith("X  ")
 
     def test_empty_when_no_real_atoms(self):
         atoms = [{"symbol": "H", "xyz": (0.0, 0.0, 0.0), "is_ghost": True}]
@@ -256,6 +258,10 @@ class TestMoleculeLoading:
     def test_show_xyz_called_on_file_load(self, make_dialog, volume_out, fake_context):
         make_dialog(volume_out)
         fake_context.show_xyz_data.assert_called_once()
+
+    def test_reset_camera_called_on_file_load(self, make_dialog, volume_out, fake_plotter):
+        make_dialog(volume_out)
+        fake_plotter.reset_camera.assert_called_once()
 
     def test_show_xyz_called_with_source_name(
         self, make_dialog, volume_out, fake_context
@@ -637,6 +643,28 @@ class TestIcssTab:
         dialog.icss_tab.draw()
         assert fake_plotter.add_mesh.call_count == 1
 
+    def test_cmap_and_span_uses_tab_controls(self, make_dialog, volume_out):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.icss_tab.cmap.setCurrentText("RdBu_r")
+        dialog.icss_tab.vmax.setValue(15.5)
+        dialog.icss_tab.auto_range.setChecked(False)
+        
+        cmap, span, auto = dialog.icss_tab._cmap_and_span()
+        assert cmap == "RdBu_r"
+        assert span == 15.5
+        assert not auto
+
+    def test_vmax_disabled_when_auto(self, make_dialog, volume_out):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        
+        dialog.icss_tab.auto_range.setChecked(True)
+        assert not dialog.icss_tab.vmax.isEnabled()
+        
+        dialog.icss_tab.auto_range.setChecked(False)
+        assert dialog.icss_tab.vmax.isEnabled()
+
     def test_auto_isovalue_is_positive(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
         assert dialog.icss_tab.isovalue.value() > 0
@@ -708,6 +736,40 @@ class TestIcssTab:
 # ---------------------------------------------------------------------------
 # Axis switching
 # ---------------------------------------------------------------------------
+
+
+class TestTabSync:
+    def test_cmap_syncs_bidirectionally(self, make_dialog, volume_out):
+        dlg = make_dialog(volume_out)
+        
+        # Change on map tab
+        dlg.map_tab.cmap.setCurrentText("RdBu_r")
+        assert dlg.icss_tab.cmap.currentText() == "RdBu_r"
+        
+        # Change on icss tab
+        dlg.icss_tab.cmap.setCurrentText("coolwarm")
+        assert dlg.map_tab.cmap.currentText() == "coolwarm"
+
+    def test_vmax_syncs_bidirectionally(self, make_dialog, volume_out):
+        dlg = make_dialog(volume_out)
+        
+        # Turn off auto range so it doesn't immediately overwrite our manual values
+        dlg.map_tab.auto_range.setChecked(False)
+        
+        dlg.map_tab.vmax.setValue(42.0)
+        assert dlg.icss_tab.vmax.value() == 42.0
+        
+        dlg.icss_tab.vmax.setValue(17.5)
+        assert dlg.map_tab.vmax.value() == 17.5
+
+    def test_auto_range_syncs_bidirectionally(self, make_dialog, volume_out):
+        dlg = make_dialog(volume_out)
+        
+        dlg.map_tab.auto_range.setChecked(False)
+        assert not dlg.icss_tab.auto_range.isChecked()
+        
+        dlg.icss_tab.auto_range.setChecked(True)
+        assert dlg.map_tab.auto_range.isChecked()
 
 
 class TestAxisSwitching:
