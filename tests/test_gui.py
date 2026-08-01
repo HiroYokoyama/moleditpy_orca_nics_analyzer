@@ -646,6 +646,59 @@ class TestMapTab:
 
 
 class TestIcssTab:
+    def test_structured_grid_preserves_volume_shape(self, volume_out):
+        pytest.importorskip("pyvista")
+        from orca_nics_analyzer.icss3d_tab import structured_grid
+
+        grid = structured_grid(
+            np.zeros((2, 3, 4)),
+            np.zeros(3),
+            np.eye(3),
+        )
+        assert grid.dimensions == (2, 3, 4)
+        assert grid.n_points == 24
+
+    def test_missing_plotter_is_handled(self, make_dialog, volume_out):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.icss_tab._plotter_getter = lambda: None
+        dialog.icss_tab.draw(silent=True)
+        assert "Drew" not in dialog.icss_tab.status.text()
+
+    def test_cut_axis_preview_adds_and_tracks_actors(
+        self, make_dialog, volume_out, fake_plotter
+    ):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.icss_tab.show_cut_axis.setChecked(True)
+        dialog.icss_tab.update_cut_axis_preview()
+        names = {call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list}
+        assert "nics_cut_axis" in names
+        assert "nics_cut_axis_edge" in names
+
+    def test_clear_actors_without_plotter_clears_local_state(
+        self, make_dialog, volume_out
+    ):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.icss_tab._actors.update({"nics_negative", "nics_positive"})
+        dialog.icss_tab._plotter_getter = lambda: None
+        dialog.icss_tab.clear_actors()
+        assert not dialog.icss_tab._actors
+
+    def test_cube_generation_reports_write_errors(
+        self, make_dialog, volume_out, monkeypatch, no_modals
+    ):
+        dialog = make_dialog(volume_out)
+
+        def fail(*args, **kwargs):
+            raise OSError("read-only output")
+
+        monkeypatch.setattr(dialog.field, "ensure_cube", fail)
+        assert dialog.icss_tab.generate_cube() is None
+        assert any("read-only output" in message for _, message in no_modals)
+
+
     def test_draws_isosurfaces(self, make_dialog, volume_out, fake_plotter):
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
