@@ -196,7 +196,11 @@ class NicsAnalyzerDialog(QDialog):
         from .icss3d_tab import Icss3DTab
 
         self.icss_tab = Icss3DTab(
-            self.field, self._plotter, plugin_version=PLUGIN_VERSION, parent=self
+            self.field,
+            self._plotter,
+            plugin_version=PLUGIN_VERSION,
+            parent=self,
+            show_in_2d=self._show_map_tab,
         )
 
         from .scan1d_tab import Scan1DTab
@@ -454,6 +458,10 @@ class NicsAnalyzerDialog(QDialog):
         """Route a 1D slice dict from the map tab to the scan tab."""
         self.scan_tab.show_slice(data)
         self.tabs.setCurrentWidget(self.scan_tab)
+
+    def _show_map_tab(self):
+        """Switch to the 2D Map tab."""
+        self.tabs.setCurrentWidget(self.map_tab)
 
     # -- actions -------------------------------------------------------------
 
