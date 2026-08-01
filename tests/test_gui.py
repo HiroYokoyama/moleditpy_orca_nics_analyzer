@@ -747,6 +747,14 @@ class TestIcssTab:
             dialog.icss_tab.save_cube_as()
         assert os.path.getsize(target) > 0
 
+    def test_cache_label_marks_axis_incompatible_cube_stale(
+        self, make_dialog, volume_out
+    ):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(volume_out)
+        dialog.field.set_axis_mode("x")
+        dialog.icss_tab._update_cache_label()
+        assert "Stale cache" in dialog.icss_tab.cache_label.text()
     def test_component_switch_updates_the_cache_label(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
         dialog.icss_tab.component.setCurrentIndex(1)

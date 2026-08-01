@@ -640,8 +640,9 @@ class Icss3DTab(QWidget):
                 "The source file location is unknown — use 'Save cube as...'."
             )
             return
-        if os.path.exists(path):
-            info = cube_io.read_generation_settings(path)
+        cached = self.field.cached_cube(component)
+        if cached:
+            info = cube_io.read_generation_settings(cached)
             grid = (
                 "x".join(str(g) for g in info["grid"])
                 if info["grid"]
@@ -649,7 +650,11 @@ class Icss3DTab(QWidget):
             )
             version = f", v{info['version']}" if info["version"] else ""
             self.cache_label.setText(
-                f"Cached: {os.path.basename(path)} ({grid}{version})"
+                f"Cached: {os.path.basename(cached)} ({grid}{version})"
+            )
+        elif os.path.exists(path):
+            self.cache_label.setText(
+                f"Stale cache: {os.path.basename(path)}; regenerate to update it."
             )
         else:
             self.cache_label.setText(f"Not generated yet: {os.path.basename(path)}")
