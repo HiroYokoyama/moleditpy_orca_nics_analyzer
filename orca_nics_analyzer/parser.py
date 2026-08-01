@@ -20,9 +20,7 @@ _ANG_ROW_RE = re.compile(
     r"^\s*([A-Za-z]{1,2}\s*:?)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*$"
 )
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][-+]?\d+)?"
-_TENSOR_ROW_RE = re.compile(
-    rf"^\s*({_NUMBER})\s+({_NUMBER})\s+({_NUMBER})\s*$"
-)
+_TENSOR_ROW_RE = re.compile(rf"^\s*({_NUMBER})\s+({_NUMBER})\s+({_NUMBER})\s*$")
 
 
 def _as_float(value):

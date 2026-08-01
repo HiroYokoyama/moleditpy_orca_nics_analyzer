@@ -192,6 +192,7 @@ class TestLoadFile:
         with patch("orca_nics_analyzer._warn_missing_shieldings") as warn:
             assert dlg.load_file(str(path)) is False
         warn.assert_called_once()
+
     def test_load_file_twice_replaces_data(self, make_dialog, volume_out, single_out):
         dlg = make_dialog()
         dlg.load_file(volume_out)
@@ -617,6 +618,10 @@ class TestMapTab:
         texts = [t.get_text() for ax in dialog.map_tab.figure.axes for t in ax.texts]
         assert any("do not form a regular" in t for t in texts)
 
+    def test_slice_line_is_hidden_by_default(self, make_dialog, plane_out):
+        dialog = make_dialog(plane_out)
+        assert not dialog.map_tab.show_1d_line.isChecked()
+
     def test_export_grid_csv(self, make_dialog, plane_out, tmp_path):
         dialog = make_dialog(plane_out)
         target = str(tmp_path / "map.csv")
@@ -673,7 +678,9 @@ class TestIcssTab:
         dialog = make_dialog(volume_out)
         dialog.icss_tab.show_cut_axis.setChecked(True)
         dialog.icss_tab.update_cut_axis_preview()
-        names = {call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list}
+        names = {
+            call.kwargs.get("name") for call in fake_plotter.add_mesh.call_args_list
+        }
         assert "nics_cut_axis" in names
         assert "nics_cut_axis_edge" in names
 
@@ -699,7 +706,6 @@ class TestIcssTab:
         assert dialog.icss_tab.generate_cube() is None
         assert any("read-only output" in message for _, message in no_modals)
 
-
     def test_draws_isosurfaces(self, make_dialog, volume_out, fake_plotter):
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
@@ -718,6 +724,19 @@ class TestIcssTab:
         dialog.icss_tab.draw()
         # Same as above, but 1 isosurface instead of 2.
         assert fake_plotter.add_mesh.call_count >= 3
+
+    def test_render_controls_refresh_automatically(self, make_dialog, volume_out):
+        dialog = make_dialog(volume_out)
+        tab = dialog.icss_tab
+        tab.draw = MagicMock()
+
+        tab.iso_slider.setValue(tab.iso_slider.value() + 1)
+        tab.show_positive.setChecked(False)
+        tab.show_cut_axis.setChecked(True)
+        next_slice = min(tab.slice_slider.maximum(), tab.slice_slider.value() + 1)
+        tab.slice_slider.setValue(next_slice)
+
+        assert tab.draw.call_count >= 4
 
     def test_cmap_and_span_uses_tab_controls(self, make_dialog, volume_out):
         pytest.importorskip("pyvista")
@@ -781,6 +800,7 @@ class TestIcssTab:
         cube_path = source.parent / "run_nics_cubes" / "run_NICS_zz.cube"
         assert cube_path.exists()
         assert "Cached:" in dialog.icss_tab.cache_label.text()
+
     def test_cache_label_tracks_the_file(self, make_dialog, volume_out, tmp_path):
         pytest.importorskip("pyvista")
         source = tmp_path / "run.out"
@@ -809,6 +829,7 @@ class TestIcssTab:
         dialog.field.set_axis_mode("x")
         dialog.icss_tab._update_cache_label()
         assert "Stale cache" in dialog.icss_tab.cache_label.text()
+
     def test_component_switch_updates_the_cache_label(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
         dialog.icss_tab.component.setCurrentIndex(1)
@@ -820,6 +841,7 @@ class TestIcssTab:
         pytest.importorskip("pyvista")
         make_dialog(plane_out)
         assert fake_plotter.add_mesh.call_count == 0
+
     def test_show_plane_in_3d(self, make_dialog, plane_out, fake_plotter):
         pytest.importorskip("pyvista")
         dialog = make_dialog(plane_out)
@@ -925,6 +947,7 @@ class TestAxisSwitching:
         dialog.icss_tab.draw = MagicMock()
         dialog.axis_combo.setCurrentIndex(2)
         dialog.icss_tab.draw.assert_called_once_with(silent=True)
+
     def test_axis_is_disabled_without_tensors(
         self, make_dialog, single_out, monkeypatch
     ):

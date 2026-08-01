@@ -161,7 +161,6 @@ class TestEdgeCases:
         data = NicsParser().load_from_memory(text)
         assert data["has_tensors"] is False
 
-
     def test_fortran_exponents_and_integer_tensor_values(self):
         text = (
             " Nucleus   0C :\n"
@@ -177,6 +176,7 @@ class TestEdgeCases:
     def test_memory_loader_rejects_bytes(self):
         with pytest.raises(TypeError, match="text"):
             NicsParser().load_from_memory(b"not text")
+
 
 class TestRuleDetection:
     """The multi-column rule under the summary header broke the table reader."""

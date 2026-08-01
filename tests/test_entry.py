@@ -82,6 +82,7 @@ class TestOpenFile:
             plugin._open_file(str(path), fake_context)
         warn.assert_called_once()
         fake_context.register_window.assert_not_called()
+
     def test_a_previous_window_is_reused(self, opened, volume_out, fake_context):
         previous = MagicMock()
         fake_context.get_window.return_value = previous

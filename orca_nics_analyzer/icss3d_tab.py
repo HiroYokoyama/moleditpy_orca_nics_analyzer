@@ -127,7 +127,7 @@ class Icss3DTab(QWidget):
 
         self.iso_slider = QSlider(Qt.Orientation.Horizontal)
         self.iso_slider.setRange(1, 1000)
-        self.iso_slider.valueChanged.connect(self._sync_spin_from_slider)
+        self.iso_slider.valueChanged.connect(self._on_iso_slider_changed)
         grid.addWidget(self.iso_slider, 1, 0, 1, 4)
 
         grid.addWidget(QLabel("Opacity:"), 2, 0)
@@ -201,7 +201,7 @@ class Icss3DTab(QWidget):
 
         self.show_cut_axis = QCheckBox("Cut axis preview")
         self.show_cut_axis.setChecked(False)
-        self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
+        self.show_cut_axis.toggled.connect(self._maybe_draw)
         s2d.addWidget(self.show_cut_axis)
 
         self.goto_2d_btn = QPushButton("→ 2D Map tab")
@@ -212,6 +212,7 @@ class Icss3DTab(QWidget):
         layout.addWidget(self.slice_group)
 
         row = QHBoxLayout()
+        row.addStretch(1)
         draw = QPushButton("Refresh")
         draw.clicked.connect(self.draw)
         row.addWidget(draw)
@@ -219,7 +220,6 @@ class Icss3DTab(QWidget):
         clear = QPushButton("Clear from 3D view")
         clear.clicked.connect(self.clear_actors)
         row.addWidget(clear)
-        row.addStretch(1)
         layout.addLayout(row)
 
         self._configure_slices()
@@ -231,6 +231,7 @@ class Icss3DTab(QWidget):
 
     def _on_auto_toggled(self, checked):
         self.vmax.setEnabled(not checked)
+        self._maybe_draw()
 
     def _configure_slices(self):
         if not self.field.is_gridded:
@@ -268,6 +269,7 @@ class Icss3DTab(QWidget):
         self.field.set_stack_axis(index)
         self._configure_slices()
         self.update_cut_axis_preview()
+        self._maybe_draw()
         if hasattr(self, "_on_slice_settings_changed"):
             self._on_slice_settings_changed()
 
@@ -276,6 +278,7 @@ class Icss3DTab(QWidget):
         self.slice_spin.setValue(value)
         self.slice_spin.blockSignals(False)
         self.update_cut_axis_preview()
+        self._maybe_draw()
         if (
             hasattr(self, "_on_slice_settings_changed")
             and self._on_slice_settings_changed
@@ -287,6 +290,7 @@ class Icss3DTab(QWidget):
         self.slice_slider.setValue(value)
         self.slice_slider.blockSignals(False)
         self.update_cut_axis_preview()
+        self._maybe_draw()
         if (
             hasattr(self, "_on_slice_settings_changed")
             and self._on_slice_settings_changed
@@ -330,6 +334,10 @@ class Icss3DTab(QWidget):
         self.isovalue.blockSignals(True)
         self.isovalue.setValue(value / 10.0)
         self.isovalue.blockSignals(False)
+
+    def _on_iso_slider_changed(self, value):
+        self._sync_spin_from_slider(value)
+        self._maybe_draw()
 
     def _on_component_changed(self):
         self._auto_isovalue()

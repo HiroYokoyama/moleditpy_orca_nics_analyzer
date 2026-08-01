@@ -221,46 +221,58 @@ class NicsAnalyzerDialog(QDialog):
 
         # Sync color mapping settings between the two tabs
         self.map_tab.cmap.currentTextChanged.connect(
-            lambda t: self.icss_tab.cmap.setCurrentText(t)
-            if self.icss_tab.cmap.currentText() != t
-            else None
+            lambda t: (
+                self.icss_tab.cmap.setCurrentText(t)
+                if self.icss_tab.cmap.currentText() != t
+                else None
+            )
         )
         self.icss_tab.cmap.currentTextChanged.connect(
-            lambda t: self.map_tab.cmap.setCurrentText(t)
-            if self.map_tab.cmap.currentText() != t
-            else None
+            lambda t: (
+                self.map_tab.cmap.setCurrentText(t)
+                if self.map_tab.cmap.currentText() != t
+                else None
+            )
         )
 
         self.map_tab.vmax.valueChanged.connect(
-            lambda v: self.icss_tab.vmax.setValue(v)
-            if self.icss_tab.vmax.value() != v
-            else None
+            lambda v: (
+                self.icss_tab.vmax.setValue(v)
+                if self.icss_tab.vmax.value() != v
+                else None
+            )
         )
         self.icss_tab.vmax.valueChanged.connect(
-            lambda v: self.map_tab.vmax.setValue(v)
-            if self.map_tab.vmax.value() != v
-            else None
+            lambda v: (
+                self.map_tab.vmax.setValue(v)
+                if self.map_tab.vmax.value() != v
+                else None
+            )
         )
 
         self.map_tab.auto_range.toggled.connect(
-            lambda c: self.icss_tab.auto_range.setChecked(c)
-            if self.icss_tab.auto_range.isChecked() != c
-            else None
+            lambda c: (
+                self.icss_tab.auto_range.setChecked(c)
+                if self.icss_tab.auto_range.isChecked() != c
+                else None
+            )
         )
         self.icss_tab.auto_range.toggled.connect(
-            lambda c: self.map_tab.auto_range.setChecked(c)
-            if self.map_tab.auto_range.isChecked() != c
-            else None
+            lambda c: (
+                self.map_tab.auto_range.setChecked(c)
+                if self.map_tab.auto_range.isChecked() != c
+                else None
+            )
         )
 
         self.icss_tab._on_slice_settings_changed = self.map_tab.refresh
-        self.map_tab._get_slice_index = (
-            lambda: self.icss_tab.slice_slider.value()
+        self.map_tab._get_slice_index = lambda: (
+            self.icss_tab.slice_slider.value()
             if hasattr(self.icss_tab, "slice_slider")
             else 0
         )
-        self.map_tab._set_slice_value_label = (
-            lambda t: self.icss_tab.slice_value.setText(t)
+        self.map_tab._set_slice_value_label = lambda t: (
+            self.icss_tab.slice_value.setText(t)
             if hasattr(self.icss_tab, "slice_value")
             else None
         )

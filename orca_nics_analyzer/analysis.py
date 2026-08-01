@@ -76,6 +76,7 @@ class NicsField:
                 raise ValueError("custom NICS_zz axis must be a finite 3-vector")
             if np.linalg.norm(axis) < 1e-12:
                 raise ValueError("custom NICS_zz axis must be non-zero")
+
     # -- axes ------------------------------------------------------------
     def stack_axis_index(self):
         """Which lattice axis the grid is sliced along.
@@ -467,7 +468,8 @@ class NicsField:
             if info.get("source_size") is None or info.get("source_mtime_ns") is None:
                 return None
             if (stat.st_size, stat.st_mtime_ns) != (
-                info["source_size"], info["source_mtime_ns"]
+                info["source_size"],
+                info["source_mtime_ns"],
             ):
                 return None
         if self.is_gridded:

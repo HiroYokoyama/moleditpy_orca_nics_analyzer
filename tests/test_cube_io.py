@@ -20,7 +20,6 @@ class TestRoundTrip:
         assert result["comment"].startswith("MoleditPy ORCA NICS Analyzer")
         assert "MoleditPy ORCA NICS Analyzer" in result["stamp"]
 
-
     def test_lengths_come_back_in_angstrom(self, tmp_path):
         path = cube_io.write_cube(
             str(tmp_path / "a.cube"),
@@ -108,6 +107,7 @@ class TestReading:
         path.write_text("comment\nstamp\n", encoding="utf-8")
         with pytest.raises(ValueError, match="incomplete header"):
             cube_io.read_cube(str(path))
+
     def test_truncated_data_raises(self, tmp_path):
         path = tmp_path / "short.cube"
         path.write_text(
@@ -150,9 +150,7 @@ class TestStamps:
     def test_stamp_records_source_fingerprint(self, tmp_path):
         source = tmp_path / "run.out"
         source.write_text("output", encoding="utf-8")
-        stamp = cube_io.stamp_line(
-            "1.0", "iso", (2, 2, 2), source=str(source)
-        )
+        stamp = cube_io.stamp_line("1.0", "iso", (2, 2, 2), source=str(source))
         path = cube_io.write_cube(
             str(tmp_path / "field.cube"),
             np.zeros((2, 2, 2)),
@@ -164,6 +162,7 @@ class TestStamps:
         assert info["source_name"] == "run.out"
         assert info["source_size"] == source.stat().st_size
         assert info["source_mtime_ns"] == source.stat().st_mtime_ns
+
     def test_stamp_records_only_the_file_name(self):
         stamp = cube_io.stamp_line("1.0", "iso", (2, 2, 2), source="/some/dir/run.out")
         assert "run.out" in stamp

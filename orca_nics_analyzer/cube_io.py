@@ -125,8 +125,14 @@ def stamp_line(version, component, shape, axis=None, source=None, axis_mode=None
 def read_generation_settings(filepath):
     """What a cached cube was written with; unknown fields come back None."""
     info = {
-        "version": None, "component": None, "grid": None, "axis": None, "axis_mode": None,
-        "source_name": None, "source_size": None, "source_mtime_ns": None
+        "version": None,
+        "component": None,
+        "grid": None,
+        "axis": None,
+        "axis_mode": None,
+        "source_name": None,
+        "source_size": None,
+        "source_mtime_ns": None,
     }
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
@@ -220,16 +226,12 @@ def read_cube(path):
         text = fh.read()
     tokens = text.splitlines()
     if len(tokens) < 6:
-        raise ValueError(
-            f"cube {os.path.basename(path)} has an incomplete header"
-        )
+        raise ValueError(f"cube {os.path.basename(path)} has an incomplete header")
     comment, stamp = tokens[0], tokens[1]
 
     header = tokens[2].split()
     if len(header) < 4:
-        raise ValueError(
-            f"cube {os.path.basename(path)} has an invalid origin header"
-        )
+        raise ValueError(f"cube {os.path.basename(path)} has an invalid origin header")
     natoms = int(header[0])
     origin = np.array([float(v) for v in header[1:4]])
     # A negative atom count marks an orbital cube: the counts stay positive and

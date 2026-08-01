@@ -178,7 +178,7 @@ class Map2DTab(QWidget):
         s1d.addWidget(self._slice1d_btn)
 
         self.show_1d_line = QCheckBox("Show line in map")
-        self.show_1d_line.setChecked(True)
+        self.show_1d_line.setChecked(False)
         self.show_1d_line.toggled.connect(self.refresh)
         s1d.addWidget(self.show_1d_line)
 

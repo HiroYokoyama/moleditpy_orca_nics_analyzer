@@ -95,6 +95,7 @@ class TestAxisModes:
         field = load_field(single_out)
         with pytest.raises(ValueError, match="component"):
             field.values("anisotropy")
+
     def test_ring_mode_uses_the_ring_normal(self, single_out):
         field = load_field(single_out, axis_mode="ring")
         probe = field.probes[0]
@@ -324,7 +325,6 @@ class TestCubes:
         with pytest.raises(ValueError):
             field.write_cube("zz")
 
-
     def test_cache_with_wrong_component_is_rejected(self, volume_out, tmp_path):
         source = tmp_path / "run.out"
         source.write_bytes(open(volume_out, "rb").read())
@@ -350,9 +350,7 @@ class TestCubes:
             np.zeros(shape),
             [0, 0, 0],
             np.eye(3),
-            stamp=cube_io.stamp_line(
-                "0.1.0", "zz", shape, axis=[1.0, 0.0, 0.0]
-            ),
+            stamp=cube_io.stamp_line("0.1.0", "zz", shape, axis=[1.0, 0.0, 0.0]),
         )
         assert field.cached_cube("zz") is None
 
@@ -364,6 +362,7 @@ class TestCubes:
         with open(source, "ab") as fh:
             fh.write(b"\nchanged")
         assert field.cached_cube("zz") is None
+
     def test_cache_is_rejected_when_the_zz_axis_mode_changes(
         self, volume_out, tmp_path
     ):
@@ -374,6 +373,7 @@ class TestCubes:
         field.ensure_cube("zz", plugin_version="0.1.0")
         field.set_axis_mode("y")
         assert field.cached_cube("zz") is None
+
 
 class TestExports:
     def test_csv_has_a_row_per_probe(self, single_out):
