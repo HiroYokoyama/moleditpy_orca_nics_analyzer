@@ -414,6 +414,18 @@ class Icss3DTab(QWidget):
             QMessageBox.information(self, "3D view", "Not enough data to contour.")
             return
 
+        # Persist the rendered component beside the source output. This is
+        # intentionally best-effort: memory-only fields and read-only folders
+        # can still be visualized, while ensure_cube reuses a valid cache.
+        if self.field.filename:
+            try:
+                self.field.ensure_cube(
+                    component, plugin_version=self.plugin_version, force=False
+                )
+                self._update_cache_label()
+            except (ValueError, OSError) as e:
+                logging.warning("[orca_nics_analyzer] auto cube save: %s", e)
+
         self.clear_actors()
         grid = structured_grid(np.nan_to_num(cube, nan=0.0), origin, steps)
         level = self.isovalue.value()
@@ -661,7 +673,8 @@ class Icss3DTab(QWidget):
             QMessageBox.critical(self, "Cube export failed", str(e))
             return None
         self._update_cache_label()
-        self.status.setText(f"{'Reused cached' if cached else 'Wrote'} cube: {path}")
+        action = "Reused cached" if cached else "Wrote cube (auto-saved)"
+        self.status.setText(f"{action} cube: {path}")
         return path
 
     def save_cube_as(self):

@@ -425,13 +425,21 @@ class NicsField:
         if not path or not os.path.exists(path):
             return None
         info = cube_io.read_generation_settings(path)
+        if info.get("component") and info["component"] != component:
+            return None
         if self.is_gridded:
             try:
-                expected = self.grid(component)[0].shape
+                expected_cube, _, _ = self.grid(component)
+                expected = expected_cube.shape
             except ValueError:
                 expected = None
             if info.get("grid") and expected and tuple(info["grid"]) != tuple(expected):
                 return None
+            expected_axis = self.grid_normal
+            saved_axis = info.get("axis")
+            if saved_axis is not None and expected_axis is not None:
+                if not np.allclose(saved_axis, expected_axis, atol=1e-5):
+                    return None
         return path
 
     def ensure_cube(self, component, plugin_version="0.0.0", tag=None, force=False):

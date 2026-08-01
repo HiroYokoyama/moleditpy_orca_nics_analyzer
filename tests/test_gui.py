@@ -698,6 +698,16 @@ class TestIcssTab:
         dialog.icss_tab.generate_cube()
         assert "Reused cached" in dialog.icss_tab.status.text()
 
+    def test_initial_3d_draw_auto_saves_selected_cube(
+        self, make_dialog, volume_out, tmp_path
+    ):
+        pytest.importorskip("pyvista")
+        source = tmp_path / "run.out"
+        source.write_bytes(open(volume_out, "rb").read())
+        dialog = make_dialog(str(source))
+        cube_path = source.parent / "run_nics_cubes" / "run_NICS_zz.cube"
+        assert cube_path.exists()
+        assert "Cached:" in dialog.icss_tab.cache_label.text()
     def test_cache_label_tracks_the_file(self, make_dialog, volume_out, tmp_path):
         source = tmp_path / "run.out"
         source.write_bytes(open(volume_out, "rb").read())

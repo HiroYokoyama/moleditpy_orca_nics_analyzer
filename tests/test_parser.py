@@ -162,6 +162,22 @@ class TestEdgeCases:
         assert data["has_tensors"] is False
 
 
+    def test_fortran_exponents_and_integer_tensor_values(self):
+        text = (
+            " Nucleus   0C :\n"
+            "Total shielding tensor (ppm):\n"
+            "  1D+01  0  -2.5d+00\n"
+            "  0  2.0  3\n"
+            "  -2.5D+00  3.0  4.0E+00\n"
+        )
+        data = NicsParser().load_from_memory(text)
+        assert data["has_tensors"] is True
+        assert data["shieldings"][0]["tensor"][0] == pytest.approx([10.0, 0.0, -2.5])
+
+    def test_memory_loader_rejects_bytes(self):
+        with pytest.raises(TypeError, match="text"):
+            NicsParser().load_from_memory(b"not text")
+
 class TestRuleDetection:
     """The multi-column rule under the summary header broke the table reader."""
 

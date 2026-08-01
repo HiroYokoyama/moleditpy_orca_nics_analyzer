@@ -308,6 +308,37 @@ class TestCubes:
             field.write_cube("zz")
 
 
+    def test_cache_with_wrong_component_is_rejected(self, volume_out, tmp_path):
+        source = tmp_path / "run.out"
+        source.write_bytes(open(volume_out, "rb").read())
+        field = load_field(str(source))
+        path, _ = field.ensure_cube("zz", plugin_version="0.1.0")
+        cube_io.write_cube(
+            path,
+            np.zeros(field.grid("zz")[0].shape),
+            [0, 0, 0],
+            np.eye(3),
+            stamp=cube_io.stamp_line("0.1.0", "iso", field.grid("zz")[0].shape),
+        )
+        assert field.cached_cube("zz") is None
+
+    def test_cache_with_wrong_axis_is_rejected(self, volume_out, tmp_path):
+        source = tmp_path / "run.out"
+        source.write_bytes(open(volume_out, "rb").read())
+        field = load_field(str(source))
+        path, _ = field.ensure_cube("zz", plugin_version="0.1.0")
+        shape = field.grid("zz")[0].shape
+        cube_io.write_cube(
+            path,
+            np.zeros(shape),
+            [0, 0, 0],
+            np.eye(3),
+            stamp=cube_io.stamp_line(
+                "0.1.0", "zz", shape, axis=[1.0, 0.0, 0.0]
+            ),
+        )
+        assert field.cached_cube("zz") is None
+
 class TestExports:
     def test_csv_has_a_row_per_probe(self, single_out):
         field = load_field(single_out)
