@@ -864,6 +864,13 @@ class TestAxisSwitching:
             or "x" in dialog.summary.toPlainText()
         )
 
+    def test_axis_change_redraws_the_3d_field(self, make_dialog, single_out):
+        from unittest.mock import MagicMock
+
+        dialog = make_dialog(single_out)
+        dialog.icss_tab.draw = MagicMock()
+        dialog.axis_combo.setCurrentIndex(2)
+        dialog.icss_tab.draw.assert_called_once_with(silent=True)
     def test_axis_is_disabled_without_tensors(
         self, make_dialog, single_out, monkeypatch
     ):

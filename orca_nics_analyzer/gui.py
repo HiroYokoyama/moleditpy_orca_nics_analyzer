@@ -494,6 +494,8 @@ class NicsAnalyzerDialog(QDialog):
         self.probe_tab.refresh()
         self.scan_tab.refresh()
         self.map_tab.refresh()
+        self.icss_tab._update_cache_label()
+        self.icss_tab.draw(silent=True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
 
     def _on_probe_visibility_toggled(self, checked):
