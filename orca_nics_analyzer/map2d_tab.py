@@ -344,9 +344,9 @@ class Map2DTab(QWidget):
         a1, a2 = info["a1"], info["a2"]
 
         if fixed_axis == 0:
-            # Fix a row of a1 → draw a horizontal line at a1[idx].
+            # Fix a row of a1 -> x is fixed, draw a VERTICAL line at x = a1[idx]
             if idx < len(a1):
-                ax.axhline(
+                ax.axvline(
                     a1[idx],
                     color="#ff9900",
                     lw=1.2,
@@ -355,9 +355,9 @@ class Map2DTab(QWidget):
                     label=f"1D slice (axis-1 row {idx})",
                 )
         else:
-            # Fix a column of a2 → draw a vertical line at a2[idx].
+            # Fix a column of a2 -> y is fixed, draw a HORIZONTAL line at y = a2[idx]
             if idx < len(a2):
-                ax.axvline(
+                ax.axhline(
                     a2[idx],
                     color="#ff9900",
                     lw=1.2,
