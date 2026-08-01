@@ -1115,12 +1115,10 @@ class TestMap2DSliceControls:
     ):
         dlg_plane = make_dialog(plane_out)
         # plane_out has 1 slice in volume sense
-        assert dlg_plane.icss_tab.slice_spin.isHidden()
-        assert dlg_plane.icss_tab.goto_2d_btn.isHidden()
+        assert dlg_plane.icss_tab.slice_group.isHidden()
 
         dlg_vol = make_dialog(volume_out)
-        assert not dlg_vol.icss_tab.slice_spin.isHidden()
-        assert not dlg_vol.icss_tab.goto_2d_btn.isHidden()
+        assert not dlg_vol.icss_tab.slice_group.isHidden()
 
     def test_show_map_tab_refreshes_map(self, make_dialog, volume_out):
         from unittest.mock import MagicMock

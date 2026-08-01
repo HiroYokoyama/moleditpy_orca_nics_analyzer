@@ -148,46 +148,13 @@ class Icss3DTab(QWidget):
         self.show_negative.toggled.connect(self._maybe_draw)
         grid.addWidget(self.show_negative, 2, 3)
 
-        self.show_cut_axis = QCheckBox("Cut axis preview")
-        self.show_cut_axis.setChecked(False)
-        self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
-        grid.addWidget(self.show_cut_axis, 3, 2)
-
-        self.stack_axis_label = QLabel("Cut axis (for 2D):")
-        grid.addWidget(self.stack_axis_label, 5, 0)
-        self.stack_axis_combo = QComboBox()
-        self.stack_axis_combo.addItems(
-            ["Lattice axis 1", "Lattice axis 2", "Lattice axis 3"]
-        )
-        self.stack_axis_combo.currentIndexChanged.connect(self._on_stack_axis_changed)
-        grid.addWidget(self.stack_axis_combo, 5, 1)
-
-        self.slice_label = QLabel("Slice (for 2D):")
-        grid.addWidget(self.slice_label, 6, 0)
-        self.slice_slider = QSlider(Qt.Orientation.Horizontal)
-        self.slice_slider.setMinimum(0)
-        self.slice_slider.valueChanged.connect(self._on_slice_changed)
-        grid.addWidget(self.slice_slider, 6, 1)
-        self.slice_spin = QSpinBox()
-        self.slice_spin.setMinimum(0)
-        self.slice_spin.valueChanged.connect(self._on_slice_spin_changed)
-        grid.addWidget(self.slice_spin, 6, 2)
-
-        self.goto_2d_btn = QPushButton("→ 2D Map tab")
-        self.goto_2d_btn.setToolTip("Switch to the 2D Map tab to view this slice.")
-        self.goto_2d_btn.clicked.connect(self._emit_show_in_2d)
-        grid.addWidget(self.goto_2d_btn, 6, 3)
-
-        self.stack_axis_label.setVisible(False)
-        self.stack_axis_combo.setVisible(False)
-
         grid.addWidget(QLabel("Colormap:"), 3, 0)
         self.cmap = QComboBox()
         self.cmap.addItems(COLORMAPS)
         self.cmap.currentIndexChanged.connect(self.draw)
         grid.addWidget(self.cmap, 3, 1)
 
-        grid.addWidget(QLabel("Range +/- ppm:"), 4, 0)
+        grid.addWidget(QLabel("Range +/- ppm:"), 3, 2)
         self.vmax = QDoubleSpinBox()
         self.vmax.setRange(0.1, 1000.0)
         self.vmax.setDecimals(2)
@@ -195,14 +162,54 @@ class Icss3DTab(QWidget):
         self.vmax.setValue(10.0)
         self.vmax.setEnabled(False)
         self.vmax.valueChanged.connect(self.draw)
-        grid.addWidget(self.vmax, 4, 1)
+        grid.addWidget(self.vmax, 3, 3)
 
         self.auto_range = QCheckBox("Auto")
         self.auto_range.setChecked(True)
         self.auto_range.toggled.connect(self._on_auto_toggled)
-        grid.addWidget(self.auto_range, 4, 2)
+        grid.addWidget(
+            self.auto_range, 3, 4 if grid.columnCount() > 4 else 3
+        )  # or add next to vmax
 
         layout.addWidget(controls)
+
+        # ---- Slice → 2D GroupBox ----
+        self.slice_group = QGroupBox("Slice → 2D")
+        s2d = QHBoxLayout(self.slice_group)
+
+        self.stack_axis_label = QLabel("Cut axis:")
+        s2d.addWidget(self.stack_axis_label)
+        self.stack_axis_combo = QComboBox()
+        self.stack_axis_combo.addItems(
+            ["Lattice axis 1", "Lattice axis 2", "Lattice axis 3"]
+        )
+        self.stack_axis_combo.currentIndexChanged.connect(self._on_stack_axis_changed)
+        s2d.addWidget(self.stack_axis_combo)
+
+        self.slice_label = QLabel("Slice:")
+        s2d.addWidget(self.slice_label)
+
+        self.slice_slider = QSlider(Qt.Orientation.Horizontal)
+        self.slice_slider.setMinimum(0)
+        self.slice_slider.valueChanged.connect(self._on_slice_changed)
+        s2d.addWidget(self.slice_slider, 1)
+
+        self.slice_spin = QSpinBox()
+        self.slice_spin.setMinimum(0)
+        self.slice_spin.valueChanged.connect(self._on_slice_spin_changed)
+        s2d.addWidget(self.slice_spin)
+
+        self.show_cut_axis = QCheckBox("Cut axis preview")
+        self.show_cut_axis.setChecked(False)
+        self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
+        s2d.addWidget(self.show_cut_axis)
+
+        self.goto_2d_btn = QPushButton("→ 2D Map tab")
+        self.goto_2d_btn.setToolTip("Switch to the 2D Map tab to view this slice.")
+        self.goto_2d_btn.clicked.connect(self._emit_show_in_2d)
+        s2d.addWidget(self.goto_2d_btn)
+
+        layout.addWidget(self.slice_group)
 
         row = QHBoxLayout()
         draw = QPushButton("Refresh")
@@ -251,10 +258,7 @@ class Icss3DTab(QWidget):
         self.slice_spin.blockSignals(False)
 
         visible = n > 1
-        self.slice_slider.setVisible(visible)
-        self.slice_label.setVisible(visible)
-        self.slice_spin.setVisible(visible)
-        self.goto_2d_btn.setVisible(visible)
+        self.slice_group.setVisible(visible)
 
     def _emit_show_in_2d(self):
         if self._show_in_2d is not None:
