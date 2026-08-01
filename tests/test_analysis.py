@@ -339,6 +339,17 @@ class TestCubes:
         )
         assert field.cached_cube("zz") is None
 
+    def test_cache_is_rejected_when_the_zz_axis_mode_changes(
+        self, volume_out, tmp_path
+    ):
+        source = tmp_path / "run.out"
+        source.write_bytes(open(volume_out, "rb").read())
+        field = load_field(str(source))
+        field.set_axis_mode("x")
+        field.ensure_cube("zz", plugin_version="0.1.0")
+        field.set_axis_mode("y")
+        assert field.cached_cube("zz") is None
+
 class TestExports:
     def test_csv_has_a_row_per_probe(self, single_out):
         field = load_field(single_out)

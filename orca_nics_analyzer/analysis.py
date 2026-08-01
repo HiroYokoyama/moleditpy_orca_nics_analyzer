@@ -403,7 +403,8 @@ class NicsField:
         path = path or self.cube_path(component, tag)
         if path is None:
             raise ValueError("no output path — the source file location is unknown")
-        axis = self.grid_normal
+        axis = self._cube_axis(component)
+        axis_mode = self.axis_mode if component == "zz" else None
         label = "NICS_iso" if component == "iso" else "NICS_zz"
         cube_io.write_cube(
             path,
@@ -414,10 +415,19 @@ class NicsField:
             coords=self.real_coords,
             comment=f"{label} field in ppm (NICS = -sigma)",
             stamp=cube_io.stamp_line(
-                plugin_version, component, cube.shape, axis, self.filename
+                plugin_version, component, cube.shape, axis, self.filename, axis_mode
             ),
         )
         return path
+
+    def _cube_axis(self, component):
+        """A global NICS_zz axis suitable for cube cache validation."""
+        if component != "zz" or not self.probes:
+            return None
+        if self.axis_mode == "ring":
+            # Each probe may use a different nearest-ring normal.
+            return None
+        return self.axis_for(self.probes[0])
 
     def cached_cube(self, component, tag=None):
         """The cached cube for *component* if one is on disk and still matches."""
@@ -435,10 +445,24 @@ class NicsField:
                 expected = None
             if info.get("grid") and expected and tuple(info["grid"]) != tuple(expected):
                 return None
-            expected_axis = self.grid_normal
-            saved_axis = info.get("axis")
-            if saved_axis is not None and expected_axis is not None:
-                if not np.allclose(saved_axis, expected_axis, atol=1e-5):
+            if component == "zz":
+                saved_mode = info.get("axis_mode")
+                if saved_mode is not None and saved_mode != self.axis_mode:
+                    return None
+                # Old stamps do not identify non-grid projections, so do not
+                # risk reusing a value field made with an unknown axis.
+                if saved_mode is None and self.axis_mode != "grid":
+                    return None
+                expected_axis = self._cube_axis(component)
+                saved_axis = info.get("axis")
+                if saved_axis is not None and expected_axis is not None:
+                    saved_axis = np.asarray(saved_axis, dtype=float)
+                    saved_axis /= np.linalg.norm(saved_axis)
+                    expected_axis = np.asarray(expected_axis, dtype=float)
+                    expected_axis /= np.linalg.norm(expected_axis)
+                    if not np.isclose(abs(saved_axis @ expected_axis), 1.0, atol=1e-5):
+                        return None
+                elif saved_axis is not None or expected_axis is not None:
                     return None
         return path
 

@@ -97,7 +97,7 @@ def _sanitize(text):
     return safe or "field"
 
 
-def stamp_line(version, component, shape, axis=None, source=None):
+def stamp_line(version, component, shape, axis=None, source=None, axis_mode=None):
     """The second cube comment line, recording how the field was made."""
     parts = [
         f"ORCA NICS Analyzer v{version}",
@@ -106,6 +106,8 @@ def stamp_line(version, component, shape, axis=None, source=None):
     ]
     if axis is not None:
         parts.append("axis=" + ",".join(f"{float(v):.6f}" for v in axis))
+    if axis_mode is not None:
+        parts.append(f"axis_mode={axis_mode}")
     if source:
         parts.append(f"source={os.path.basename(source)}")
     return " ".join(parts)
@@ -113,7 +115,9 @@ def stamp_line(version, component, shape, axis=None, source=None):
 
 def read_generation_settings(filepath):
     """What a cached cube was written with; unknown fields come back None."""
-    info = {"version": None, "component": None, "grid": None, "axis": None}
+    info = {
+        "version": None, "component": None, "grid": None, "axis": None, "axis_mode": None
+    }
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
             fh.readline()
@@ -134,6 +138,9 @@ def read_generation_settings(filepath):
     m = re.search(r"axis=([-0-9.]+),([-0-9.]+),([-0-9.]+)", stamp)
     if m:
         info["axis"] = tuple(float(g) for g in m.groups())
+    m = re.search(r"axis_mode=(\S+)", stamp)
+    if m:
+        info["axis_mode"] = m.group(1)
     return info
 
 

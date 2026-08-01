@@ -116,7 +116,9 @@ class TestReading:
 
 class TestStamps:
     def test_round_trip(self, tmp_path):
-        stamp = cube_io.stamp_line("1.2.3", "zz", (5, 6, 7), [0, 0, 1], "/tmp/run.out")
+        stamp = cube_io.stamp_line(
+            "1.2.3", "zz", (5, 6, 7), [0, 0, 1], "/tmp/run.out", "grid"
+        )
         path = cube_io.write_cube(
             str(tmp_path / "a.cube"),
             np.zeros((5, 6, 7)),
@@ -130,6 +132,7 @@ class TestStamps:
             "component": "zz",
             "grid": (5, 6, 7),
             "axis": (0.0, 0.0, 1.0),
+            "axis_mode": "grid",
         }
 
     def test_stamp_records_only_the_file_name(self):
