@@ -84,7 +84,7 @@ carried through as-is rather than resampled onto a lab box.
 ## Development
 
 ```bash
-python -m pytest tests/ -v                     # 210 tests
+python -m pytest tests/ -v                     # 211 tests
 python -m pytest tests/ --cov=orca_nics_analyzer --cov-report=term-missing
 python tests/make_fixtures.py                  # regenerate the sample outputs
 ```
