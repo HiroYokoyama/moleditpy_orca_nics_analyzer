@@ -1,0 +1,366 @@
+
+                         Program Version 5.0.4 -  RELEASE  -
+
+                  * plain NMR, no NICS probes *
+
+---------------------------------
+CARTESIAN COORDINATES (ANGSTROEM)
+---------------------------------
+  C       1.397000    0.000000    0.000000
+  C       0.698500    1.209837    0.000000
+  C      -0.698500    1.209837    0.000000
+  C      -1.397000    0.000000    0.000000
+  C      -0.698500   -1.209837    0.000000
+  C       0.698500   -1.209837    0.000000
+  H       2.484000    0.000000    0.000000
+  H       1.242000    2.151207    0.000000
+  H      -1.242000    2.151207    0.000000
+  H      -2.484000    0.000000    0.000000
+  H      -1.242000   -2.151207    0.000000
+  H       1.242000   -2.151207    0.000000
+
+----------------------------
+CARTESIAN COORDINATES (A.U.)
+----------------------------
+  NO LB      ZA    FRAG     MASS         X           Y           Z
+   0 C     6.0000    0     12.011    2.639947    0.000000    0.000000
+   1 C     6.0000    0     12.011    1.319974    2.286262    0.000000
+   2 C     6.0000    0     12.011   -1.319974    2.286262    0.000000
+   3 C     6.0000    0     12.011   -2.639947    0.000000    0.000000
+   4 C     6.0000    0     12.011   -1.319974   -2.286262    0.000000
+   5 C     6.0000    0     12.011    1.319974   -2.286262    0.000000
+   6 H     1.0000    0      1.008    4.694080    0.000000    0.000000
+   7 H     1.0000    0      1.008    2.347040    4.065192    0.000000
+   8 H     1.0000    0      1.008   -2.347040    4.065192    0.000000
+   9 H     1.0000    0      1.008   -4.694080    0.000000    0.000000
+  10 H     1.0000    0      1.008   -2.347040   -4.065192    0.000000
+  11 H     1.0000    0      1.008    2.347040   -4.065192    0.000000
+
+
+-------------------------------------------------------------------
+                    CHEMICAL SHIELDING (ppm)
+-------------------------------------------------------------------
+
+ --------------
+ Nucleus   0C :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+         29.230          0.000          0.000
+          0.000         27.424          0.000
+          0.000          0.000         56.224
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+         19.487          0.000          0.000
+          0.000         18.283          0.000
+          0.000          0.000         37.483
+
+Total shielding tensor (ppm): 
+         48.717          0.000          0.000
+          0.000         45.707          0.000
+          0.000          0.000         93.707
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            45.707          48.717          93.707  iso=      62.710
+
+ --------------
+ Nucleus   1C :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+         14.376          8.576          0.000
+          8.576         42.279          0.000
+          0.000          0.000         56.224
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          9.584          5.718          0.000
+          5.718         28.186          0.000
+          0.000          0.000         37.483
+
+Total shielding tensor (ppm): 
+         23.960         14.294          0.000
+         14.294         70.465          0.000
+          0.000          0.000         93.707
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            19.917          74.507          93.707  iso=      62.710
+
+ --------------
+ Nucleus   2C :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+         14.376         -8.576          0.000
+         -8.576         42.279          0.000
+          0.000          0.000         56.224
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          9.584         -5.718          0.000
+         -5.718         28.186          0.000
+          0.000          0.000         37.483
+
+Total shielding tensor (ppm): 
+         23.960        -14.294          0.000
+        -14.294         70.465          0.000
+          0.000          0.000         93.707
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            19.917          74.507          93.707  iso=      62.710
+
+ --------------
+ Nucleus   3C :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+         29.230         -0.000          0.000
+         -0.000         27.424          0.000
+          0.000          0.000         56.224
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+         19.487         -0.000          0.000
+         -0.000         18.283          0.000
+          0.000          0.000         37.483
+
+Total shielding tensor (ppm): 
+         48.717         -0.000          0.000
+         -0.000         45.707          0.000
+          0.000          0.000         93.707
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            45.707          48.717          93.707  iso=      62.710
+
+ --------------
+ Nucleus   4C :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+         14.376          8.576          0.000
+          8.576         42.279          0.000
+          0.000          0.000         56.224
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          9.584          5.718          0.000
+          5.718         28.186          0.000
+          0.000          0.000         37.483
+
+Total shielding tensor (ppm): 
+         23.960         14.294          0.000
+         14.294         70.465          0.000
+          0.000          0.000         93.707
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            19.917          74.507          93.707  iso=      62.710
+
+ --------------
+ Nucleus   5C :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+         14.376         -8.576          0.000
+         -8.576         42.279          0.000
+          0.000          0.000         56.224
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          9.584         -5.718          0.000
+         -5.718         28.186          0.000
+          0.000          0.000         37.483
+
+Total shielding tensor (ppm): 
+         23.960        -14.294          0.000
+        -14.294         70.465          0.000
+          0.000          0.000         93.707
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            19.917          74.507          93.707  iso=      62.710
+
+ --------------
+ Nucleus   6H :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+          8.778          0.000          0.000
+          0.000         12.455          0.000
+          0.000          0.000         23.975
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          5.852          0.000          0.000
+          0.000          8.303          0.000
+          0.000          0.000         15.983
+
+Total shielding tensor (ppm): 
+         14.630          0.000          0.000
+          0.000         20.758          0.000
+          0.000          0.000         39.958
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            14.630          20.758          39.958  iso=      25.116
+
+ --------------
+ Nucleus   7H :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+          6.136          1.526          0.000
+          1.526         15.097          0.000
+          0.000          0.000         23.975
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          4.091          1.017          0.000
+          1.017         10.065          0.000
+          0.000          0.000         15.983
+
+Total shielding tensor (ppm): 
+         10.226          2.543          0.000
+          2.543         25.162          0.000
+          0.000          0.000         39.958
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total             9.805          25.583          39.958  iso=      25.116
+
+ --------------
+ Nucleus   8H :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+          6.136         -1.526          0.000
+         -1.526         15.097          0.000
+          0.000          0.000         23.975
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          4.091         -1.017          0.000
+         -1.017         10.065          0.000
+          0.000          0.000         15.983
+
+Total shielding tensor (ppm): 
+         10.226         -2.543          0.000
+         -2.543         25.162          0.000
+          0.000          0.000         39.958
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total             9.805          25.583          39.958  iso=      25.116
+
+ --------------
+ Nucleus   9H :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+          8.778         -0.000          0.000
+         -0.000         12.455          0.000
+          0.000          0.000         23.975
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          5.852         -0.000          0.000
+         -0.000          8.303          0.000
+          0.000          0.000         15.983
+
+Total shielding tensor (ppm): 
+         14.630         -0.000          0.000
+         -0.000         20.758          0.000
+          0.000          0.000         39.958
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total            14.630          20.758          39.958  iso=      25.116
+
+ --------------
+ Nucleus  10H :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+          6.136          1.526          0.000
+          1.526         15.097          0.000
+          0.000          0.000         23.975
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          4.091          1.017          0.000
+          1.017         10.065          0.000
+          0.000          0.000         15.983
+
+Total shielding tensor (ppm): 
+         10.226          2.543          0.000
+          2.543         25.162          0.000
+          0.000          0.000         39.958
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total             9.805          25.583          39.958  iso=      25.116
+
+ --------------
+ Nucleus  11H :
+ --------------
+
+Diamagnetic contribution to the shielding tensor (ppm) : 
+          6.136         -1.526          0.000
+         -1.526         15.097          0.000
+          0.000          0.000         23.975
+
+Paramagnetic contribution to the shielding tensor (ppm): 
+          4.091         -1.017          0.000
+         -1.017         10.065          0.000
+          0.000          0.000         15.983
+
+Total shielding tensor (ppm): 
+         10.226         -2.543          0.000
+         -2.543         25.162          0.000
+          0.000          0.000         39.958
+
+
+ Diagonalized sT*s matrix:
+ 
+        ---------------  ---------------  ---------------
+ Total             9.805          25.583          39.958  iso=      25.116
+
+
+--------------------------------
+CHEMICAL SHIELDING SUMMARY (ppm)
+--------------------------------
+
+
+  Nucleus  Element    Isotropic     Anisotropy
+  -------  -------  ------------   ------------
+      0       C            62.710        46.495 
+      1       C            62.710        46.495 
+      2       C            62.710        46.495 
+      3       C            62.710        46.495 
+      4       C            62.710        46.495 
+      5       C            62.710        46.495 
+      6       H            25.116        22.264 
+      7       H            25.116        22.264 
+      8       H            25.116        22.264 
+      9       H            25.116        22.264 
+     10       H            25.116        22.264 
+     11       H            25.116        22.264 
+
+
+                             ****ORCA TERMINATED NORMALLY****
