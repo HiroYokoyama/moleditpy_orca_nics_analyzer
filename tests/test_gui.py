@@ -1148,6 +1148,6 @@ class TestMap2DSliceControls:
         from unittest.mock import MagicMock
 
         dlg = make_dialog(volume_out)
-        dlg.map_tab.refresh = MagicMock()
-        dlg.icss_tab.slice_slider.setValue(2)
-        assert dlg.map_tab.refresh.called
+        dlg.icss_tab._on_slice_settings_changed = MagicMock()
+        dlg.icss_tab.slice_slider.setValue(0)
+        assert dlg.icss_tab._on_slice_settings_changed.called
