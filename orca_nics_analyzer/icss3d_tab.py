@@ -561,8 +561,8 @@ class Icss3DTab(QWidget):
                 self._actors.add(ACTOR_CUT_AXIS + "_edge")
         try:
             plotter.render()
-        except Exception:
-            pass
+        except Exception as e:  # host renderers may fail after widget teardown
+            logging.debug("[orca_nics_analyzer] cut-axis render: %s", e)
 
     def show_plane(self, component, slice_index):
         """Drop one map slice into the 3D viewer as a coloured plane."""
