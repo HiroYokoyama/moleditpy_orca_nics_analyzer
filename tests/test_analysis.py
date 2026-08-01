@@ -259,6 +259,8 @@ class TestCubes:
         cube, _, _ = field.grid("zz")
         assert np.allclose(result["data"], np.nan_to_num(cube))
         assert len(result["symbols"]) == 12
+        assert result["comment"].startswith("MoleditPy ORCA NICS Analyzer")
+        assert "generation_conditions:" in result["stamp"]
 
     def test_stamp_records_the_settings(self, volume_out, tmp_path):
         field = load_field(volume_out)

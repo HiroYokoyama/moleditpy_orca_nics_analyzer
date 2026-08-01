@@ -16,6 +16,10 @@ class TestRoundTrip:
         data = np.arange(3 * 4 * 5, dtype=float).reshape(3, 4, 5)
         path = cube_io.write_cube(str(tmp_path / "a.cube"), data, [0, 0, 0], np.eye(3))
         assert np.allclose(cube_io.read_cube(path)["data"], data)
+        result = cube_io.read_cube(path)
+        assert result["comment"].startswith("MoleditPy ORCA NICS Analyzer")
+        assert "MoleditPy ORCA NICS Analyzer" in result["stamp"]
+
 
     def test_lengths_come_back_in_angstrom(self, tmp_path):
         path = cube_io.write_cube(

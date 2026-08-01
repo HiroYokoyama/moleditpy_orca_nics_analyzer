@@ -432,7 +432,7 @@ class NicsField:
             steps,
             symbols=self.real_symbols,
             coords=self.real_coords,
-            comment=f"{label} field in ppm (NICS = -sigma)",
+            comment=f"MoleditPy ORCA NICS Analyzer: {label} field in ppm (NICS = -sigma)",
             stamp=cube_io.stamp_line(
                 plugin_version, component, cube.shape, axis, self.filename, axis_mode
             ),

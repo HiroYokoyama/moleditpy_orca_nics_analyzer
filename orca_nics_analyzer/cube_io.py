@@ -16,6 +16,8 @@ except ImportError:  # CI installs pytest only
 
 BOHR_PER_ANGSTROM = 1.0 / 0.52917720859
 
+CUBE_HEADER_PREFIX = "MoleditPy ORCA NICS Analyzer"
+
 ATOMIC_NUMBERS = {
     "H": 1,
     "He": 2,
@@ -100,7 +102,8 @@ def _sanitize(text):
 def stamp_line(version, component, shape, axis=None, source=None, axis_mode=None):
     """The second cube comment line, recording how the field was made."""
     parts = [
-        f"ORCA NICS Analyzer v{version}",
+        f"{CUBE_HEADER_PREFIX} v{version}",
+        "generation_conditions:",
         f"component={component}",
         f"grid={'x'.join(str(int(n)) for n in shape)}",
     ]
@@ -167,7 +170,7 @@ def write_cube(
     vectors,
     symbols=(),
     coords=(),
-    comment="NICS field (ppm)",
+    comment=f"{CUBE_HEADER_PREFIX}: NICS field (ppm)",
     stamp="",
 ):
     """Write *data* as a cube. ``origin``/``vectors``/``coords`` are Angstrom.
