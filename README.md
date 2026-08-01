@@ -81,14 +81,14 @@ the NICS_zz controls are disabled rather than guessing.
 
 Cubes are written automatically to `<output>_nics_cubes/` beside the ORCA file and reused on the
 next open when the stamped grid still matches; **Regenerate** overwrites. They are
-ordinary Gaussian cubes in ppm, readable by Cube File Viewer, Orbital Comparator,
+ordinary Gaussian cubes in ppm, stamped with the MoleditPy plugin name, version, component, grid, axis and source generation conditions. They are readable by Cube File Viewer, Orbital Comparator,
 VMD and the rest. A ring-frame grid is not axis-aligned, and its voxel vectors are
 carried through as-is rather than resampled onto a lab box.
 
 ## Development
 
 ```bash
-python -m pytest tests/ -v                     # 211 tests
+python -m pytest tests/ -v                     # full test suite
 python -m pytest tests/ --cov=orca_nics_analyzer --cov-report=term-missing
 python tests/make_fixtures.py                  # regenerate the sample outputs
 ```

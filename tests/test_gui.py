@@ -662,6 +662,7 @@ class TestIcssTab:
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
         dialog.icss_tab._plotter_getter = lambda: None
+        dialog.icss_tab.status.clear()
         dialog.icss_tab.draw(silent=True)
         assert "Drew" not in dialog.icss_tab.status.text()
 
