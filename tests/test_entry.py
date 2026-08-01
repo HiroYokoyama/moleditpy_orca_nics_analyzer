@@ -69,6 +69,19 @@ class TestOpenFile:
         assert warn.called
         assert "No NICS probes" in warn.call_args.args[1]
 
+    def test_ghosts_without_shieldings_are_refused(self, tmp_path, fake_context):
+        path = tmp_path / "ghosts_only.out"
+        path.write_text(
+            "CARTESIAN COORDINATES (ANGSTROEM)\n"
+            "---------------------------------\n"
+            "  C      0.000000    0.000000    0.000000\n"
+            "  H:     0.000000    0.000000    1.000000\n\n",
+            encoding="utf-8",
+        )
+        with patch("orca_nics_analyzer._warn_missing_shieldings") as warn:
+            plugin._open_file(str(path), fake_context)
+        warn.assert_called_once()
+        fake_context.register_window.assert_not_called()
     def test_a_previous_window_is_reused(self, opened, volume_out, fake_context):
         previous = MagicMock()
         fake_context.get_window.return_value = previous

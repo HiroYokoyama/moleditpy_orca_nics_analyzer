@@ -177,6 +177,21 @@ class TestLoadFile:
         dlg.load_file(no_ghosts_out)
         assert any("ghost" in msg.lower() for _, msg in no_modals)
 
+    def test_load_file_returns_false_for_ghosts_without_shieldings(
+        self, make_dialog, tmp_path
+    ):
+        path = tmp_path / "ghosts_only.out"
+        path.write_text(
+            "CARTESIAN COORDINATES (ANGSTROEM)\n"
+            "---------------------------------\n"
+            "  C      0.000000    0.000000    0.000000\n"
+            "  H:     0.000000    0.000000    1.000000\n\n",
+            encoding="utf-8",
+        )
+        dlg = make_dialog()
+        with patch("orca_nics_analyzer._warn_missing_shieldings") as warn:
+            assert dlg.load_file(str(path)) is False
+        warn.assert_called_once()
     def test_load_file_twice_replaces_data(self, make_dialog, volume_out, single_out):
         dlg = make_dialog()
         dlg.load_file(volume_out)
