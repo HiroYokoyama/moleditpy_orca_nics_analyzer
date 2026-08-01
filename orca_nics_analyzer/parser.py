@@ -5,6 +5,7 @@ the NMR shielding of every nucleus (isotropic value plus, when ORCA printed
 it, the full 3x3 tensor that ``NICS_zz`` is projected out of).
 """
 
+import logging
 import re
 
 # " Nucleus   8H :"  /  " Nucleus  12H:"  /  " Nucleus   0C  :"
@@ -225,7 +226,7 @@ class NicsParser:
                         "tensor": None,
                     }
                 except ValueError:
-                    pass
+                    logging.debug("[orca_nics_analyzer] failed to parse summary line: %r", lines[i], exc_info=True)
                 blanks = 0
             elif _blank(lines[i]):
                 blanks += 1

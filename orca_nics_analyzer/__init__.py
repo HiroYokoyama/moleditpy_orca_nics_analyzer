@@ -116,7 +116,7 @@ def initialize(context):
                 existing.activateWindow()
                 return
             except (RuntimeError, AttributeError):
-                pass
+                logging.debug("[orca_nics_analyzer] failed to raise existing window", exc_info=True)
 
         mw = context.get_main_window()
         from .gui import NicsAnalyzerDialog
