@@ -139,6 +139,27 @@ class Icss3DTab(QWidget):
         self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
         grid.addWidget(self.show_cut_axis, 3, 2)
 
+        self.stack_axis_label = QLabel("Cut axis (for 2D):")
+        grid.addWidget(self.stack_axis_label, 5, 0)
+        self.stack_axis_combo = QComboBox()
+        self.stack_axis_combo.addItems(
+            ["Lattice axis 1", "Lattice axis 2", "Lattice axis 3"]
+        )
+        self.stack_axis_combo.currentIndexChanged.connect(self._on_stack_axis_changed)
+        grid.addWidget(self.stack_axis_combo, 5, 1)
+
+        self.slice_label = QLabel("Slice (for 2D):")
+        grid.addWidget(self.slice_label, 6, 0)
+        self.slice_slider = QSlider(Qt.Orientation.Horizontal)
+        self.slice_slider.setMinimum(0)
+        self.slice_slider.valueChanged.connect(self._on_slice_changed)
+        grid.addWidget(self.slice_slider, 6, 1, 1, 2)
+        self.slice_value = QLabel("-")
+        grid.addWidget(self.slice_value, 6, 3)
+
+        self.stack_axis_label.setVisible(False)
+        self.stack_axis_combo.setVisible(False)
+
         grid.addWidget(QLabel("Colormap:"), 3, 0)
         self.cmap = QComboBox()
         self.cmap.addItems(COLORMAPS)
@@ -172,10 +193,48 @@ class Icss3DTab(QWidget):
         row.addStretch(1)
         layout.addLayout(row)
 
+        self._configure_slices()
+
         self._build_cube_ui(layout)
 
     def _on_auto_toggled(self, checked):
         self.vmax.setEnabled(not checked)
+
+    def _configure_slices(self):
+        if not self.field.is_gridded:
+            return
+
+        self.stack_axis_label.setVisible(True)
+        self.stack_axis_combo.setVisible(True)
+        self.stack_axis_combo.blockSignals(True)
+        self.stack_axis_combo.setCurrentIndex(self.field.stack_axis_index())
+        self.stack_axis_combo.blockSignals(False)
+
+        try:
+            info = self.field.plane_data(
+                self.component.currentData() if hasattr(self, "component") else "zz"
+            )
+        except ValueError:
+            return
+        n = info["n_slices"]
+        self.slice_slider.setMaximum(max(0, n - 1))
+        self.slice_slider.setValue(info["slice_index"])
+        visible = n > 1
+        self.slice_slider.setVisible(visible)
+        self.slice_label.setVisible(visible)
+        self.slice_value.setVisible(visible)
+
+    def _on_stack_axis_changed(self, index):
+        self.field.set_stack_axis(index)
+        self._configure_slices()
+        self.update_cut_axis_preview()
+        if hasattr(self, "_on_slice_settings_changed"):
+            self._on_slice_settings_changed()
+
+    def _on_slice_changed(self):
+        self.update_cut_axis_preview()
+        if hasattr(self, "_on_slice_settings_changed"):
+            self._on_slice_settings_changed()
 
     def _build_cube_ui(self, layout):
         cube_group = QGroupBox("Cube file")
@@ -368,28 +427,37 @@ class Icss3DTab(QWidget):
 
                 origin = self.field.layout["origin"]
 
+                slice_idx = (
+                    self.slice_slider.value() if hasattr(self, "slice_slider") else 0
+                )
+                idx_coord = (
+                    float(coords[stack_idx][slice_idx])
+                    if slice_idx < len(coords[stack_idx])
+                    else stack_center
+                )
+
                 # Corners of the plane
                 p00 = (
                     origin
-                    + axes[stack_idx] * stack_center
+                    + axes[stack_idx] * idx_coord
                     + axes[idx1] * c1_min
                     + axes[idx2] * c2_min
                 )
                 p10 = (
                     origin
-                    + axes[stack_idx] * stack_center
+                    + axes[stack_idx] * idx_coord
                     + axes[idx1] * c1_max
                     + axes[idx2] * c2_min
                 )
                 p01 = (
                     origin
-                    + axes[stack_idx] * stack_center
+                    + axes[stack_idx] * idx_coord
                     + axes[idx1] * c1_min
                     + axes[idx2] * c2_max
                 )
                 p11 = (
                     origin
-                    + axes[stack_idx] * stack_center
+                    + axes[stack_idx] * idx_coord
                     + axes[idx1] * c1_max
                     + axes[idx2] * c2_max
                 )

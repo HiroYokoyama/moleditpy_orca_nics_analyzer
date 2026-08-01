@@ -249,8 +249,16 @@ class NicsAnalyzerDialog(QDialog):
             else None
         )
 
-        self.map_tab.stack_axis_combo.currentIndexChanged.connect(
-            lambda _: self.icss_tab.update_cut_axis_preview()
+        self.icss_tab._on_slice_settings_changed = self.map_tab.refresh
+        self.map_tab._get_slice_index = (
+            lambda: self.icss_tab.slice_slider.value()
+            if hasattr(self.icss_tab, "slice_slider")
+            else 0
+        )
+        self.map_tab._set_slice_value_label = (
+            lambda t: self.icss_tab.slice_value.setText(t)
+            if hasattr(self.icss_tab, "slice_value")
+            else None
         )
 
         self.summary = QTextEdit()

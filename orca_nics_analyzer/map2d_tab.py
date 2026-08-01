@@ -139,31 +139,7 @@ class Map2DTab(QWidget):
         self.show_probes.toggled.connect(self.refresh)
         grid.addWidget(self.show_probes, 1, 5)
 
-        self.show_cut_axis = QCheckBox("Cut axis line")
-        self.show_cut_axis.setChecked(True)
-        self.show_cut_axis.toggled.connect(self.refresh)
-        grid.addWidget(self.show_cut_axis, 2, 0, 1, 2)
-
-        self.slice_label = QLabel("Slice:")
-        grid.addWidget(self.slice_label, 3, 0)
-        self.slice_slider = QSlider(Qt.Orientation.Horizontal)
-        self.slice_slider.setMinimum(0)
-        self.slice_slider.valueChanged.connect(self.refresh)
-        grid.addWidget(self.slice_slider, 3, 1, 1, 4)
-        self.slice_value = QLabel("-")
-        grid.addWidget(self.slice_value, 3, 5)
-
-        self.stack_axis_label = QLabel("Cut axis:")
-        grid.addWidget(self.stack_axis_label, 4, 0)
-        self.stack_axis_combo = QComboBox()
-        self.stack_axis_combo.addItems(
-            ["Lattice axis 1", "Lattice axis 2", "Lattice axis 3"]
-        )
-        self.stack_axis_combo.currentIndexChanged.connect(self._on_stack_axis_changed)
-        grid.addWidget(self.stack_axis_combo, 4, 1, 1, 2)
-
-        self.stack_axis_label.setVisible(False)
-        self.stack_axis_combo.setVisible(False)
+        # Slice controls moved to 3D tab per user request
 
         layout.addWidget(controls)
 
@@ -224,26 +200,6 @@ class Map2DTab(QWidget):
         if not self.field.is_gridded:
             return
 
-        is_volume = self.field.layout["kind"] == "volume"
-        self.stack_axis_label.setVisible(is_volume)
-        self.stack_axis_combo.setVisible(is_volume)
-        if is_volume:
-            self.stack_axis_combo.blockSignals(True)
-            self.stack_axis_combo.setCurrentIndex(self.field.stack_axis_index())
-            self.stack_axis_combo.blockSignals(False)
-
-        try:
-            info = self.field.plane_data(self._component())
-        except ValueError:
-            return
-        n = info["n_slices"]
-        self.slice_slider.setMaximum(max(0, n - 1))
-        self.slice_slider.setValue(info["slice_index"])
-        visible = n > 1
-        self.slice_slider.setVisible(visible)
-        self.slice_label.setVisible(visible)
-        self.slice_value.setVisible(visible)
-
         # Set up the 2D→1D slider range based on the first in-plane axis.
         self._update_slice1d_range()
 
@@ -266,11 +222,6 @@ class Map2DTab(QWidget):
 
     def _on_slice1d_axis_changed(self):
         self._update_slice1d_range()
-        self.refresh()
-
-    def _on_stack_axis_changed(self, index):
-        self.field.set_stack_axis(index)
-        self._configure_slices()
         self.refresh()
 
     def _component(self):
@@ -299,7 +250,13 @@ class Map2DTab(QWidget):
             return
 
         component = self._component()
-        info = self.field.plane_slice(component, self.slice_slider.value())
+
+        # Get slice index from 3D tab if possible, otherwise use 0/middle
+        slice_idx = 0
+        if hasattr(self, "_get_slice_index"):
+            slice_idx = self._get_slice_index()
+
+        info = self.field.plane_slice(component, slice_idx)
         values = info["values"]
 
         finite = values[np.isfinite(values)]
@@ -312,12 +269,31 @@ class Map2DTab(QWidget):
         else:
             span = self.vmax.value()
 
+        rings = self.field.rings
+        a1_offset = 0.0
+        a2_offset = 0.0
+        if rings:
+            plane_center_3d = (
+                self.field.layout["origin"]
+                + float(
+                    self.field.layout["coords"][info["order"][2]][info["slice_index"]]
+                )
+                * info["normal"]
+            )
+            nearest, _, _ = nm.nearest_ring(plane_center_3d, rings)
+            rel_ring = nearest["centroid"] - self.field.layout["origin"]
+            a1_offset = rel_ring @ info["axis1"]
+            a2_offset = rel_ring @ info["axis2"]
+
+        plot_a1 = info["a1"] - a1_offset
+        plot_a2 = info["a2"] - a2_offset
+
         ax = self.figure.add_subplot(111)
         levels = np.linspace(-span, span, self.levels.value())
         # values is indexed [a1, a2]; contourf wants [row=y, col=x].
         mesh = ax.contourf(
-            info["a1"],
-            info["a2"],
+            plot_a1,
+            plot_a2,
             values.T,
             levels=levels,
             cmap=self.cmap.currentText(),
@@ -325,8 +301,8 @@ class Map2DTab(QWidget):
         )
         if self.show_contours.isChecked():
             lines = ax.contour(
-                info["a1"],
-                info["a2"],
+                plot_a1,
+                plot_a2,
                 values.T,
                 levels=levels[:: max(1, len(levels) // 10)],
                 colors="k",
@@ -336,14 +312,14 @@ class Map2DTab(QWidget):
             ax.clabel(lines, inline=True, fontsize=6, fmt="%.0f")
 
         if self.show_probes.isChecked():
-            a1, a2 = np.meshgrid(info["a1"], info["a2"], indexing="ij")
-            ax.plot(a1.ravel(), a2.ravel(), "k.", markersize=2, alpha=0.4)
+            a1_mesh, a2_mesh = np.meshgrid(plot_a1, plot_a2, indexing="ij")
+            ax.plot(a1_mesh.ravel(), a2_mesh.ravel(), "k.", markersize=2, alpha=0.4)
 
         if self.show_molecule.isChecked():
-            self._draw_molecule(ax, info)
+            self._draw_molecule(ax, info, a1_offset, a2_offset)
 
         # ---- 2D→1D crosshair overlay ------------------------------------
-        self._draw_slice1d_crosshair(ax, info)
+        self._draw_slice1d_crosshair(ax, info, a1_offset, a2_offset)
 
         label = "NICS$_{zz}$" if component == "zz" else "NICS(iso)"
         bar = self.figure.colorbar(mesh, ax=ax)
@@ -359,23 +335,21 @@ class Map2DTab(QWidget):
         if offset is not None:
             title += f" ({offset:+.2f} Å from the ring plane)"
         ax.set_title(title, fontsize=10)
-        self.slice_value.setText("-" if offset is None else f"{offset:+.2f} Å")
+
+        if hasattr(self, "_set_slice_value_label"):
+            self._set_slice_value_label("-" if offset is None else f"{offset:+.2f} Å")
+
         self._slice1d_label.setText(str(self._slice1d_slider.value()))
 
         self.canvas.draw_idle()
 
-    def _draw_slice1d_crosshair(self, ax, info):
+    def _draw_slice1d_crosshair(self, ax, info, a1_offset, a2_offset):
         """Draw a dashed line on the map showing where the 1D slice will cut."""
         if not self.field.is_gridded:
             return
         fixed_axis = self._slice1d_axis.currentData()
         idx = self._slice1d_slider.value()
-        a1, a2 = info["a1"], info["a2"]
-
-        show_arrow = hasattr(self, "show_cut_axis") and self.show_cut_axis.isChecked()
-
-        if not show_arrow:
-            return
+        a1, a2 = info["a1"] - a1_offset, info["a2"] - a2_offset
 
         if fixed_axis == 0:
             # Fix a row of a1 -> x is fixed, draw a VERTICAL line at x = a1[idx]
@@ -418,15 +392,15 @@ class Map2DTab(QWidget):
         _, height, _ = nm.nearest_ring(point, rings)
         return height
 
-    def _draw_molecule(self, ax, info):
+    def _draw_molecule(self, ax, info, a1_offset, a2_offset):
         """Bonds of the real molecule, projected onto the map plane."""
         coords = self.field.real_coords
         if len(coords) == 0:
             return
         origin = self.field.layout["origin"]
         rel = coords - origin
-        u = rel @ info["axis1"]
-        v = rel @ info["axis2"]
+        u = (rel @ info["axis1"]) - a1_offset
+        v = (rel @ info["axis2"]) - a2_offset
         w = np.abs(rel @ info["normal"])
 
         for i, j in nm.bond_list(self.field.real_symbols, coords):
@@ -441,7 +415,10 @@ class Map2DTab(QWidget):
         if self._show_in_3d is None:
             return
         try:
-            self._show_in_3d(self._component(), self.slice_slider.value())
+            slice_idx = 0
+            if hasattr(self, "_get_slice_index"):
+                slice_idx = self._get_slice_index()
+            self._show_in_3d(self._component(), slice_idx)
         except Exception as e:  # the host viewer is out of our control
             logging.warning("[orca_nics_analyzer] show in 3D: %s", e)
             QMessageBox.warning(self, "3D view", f"Could not draw the plane:\n{e}")
@@ -456,11 +433,14 @@ class Map2DTab(QWidget):
             )
             return
         try:
+            slice_idx = 0
+            if hasattr(self, "_get_slice_index"):
+                slice_idx = self._get_slice_index()
             data = self.field.extract_line(
                 component=self._component(),
                 fixed_in_plane_axis=self._slice1d_axis.currentData(),
                 fixed_index=self._slice1d_slider.value(),
-                stack_index=self.slice_slider.value(),
+                stack_index=slice_idx,
             )
         except (ValueError, IndexError) as e:
             logging.warning("[orca_nics_analyzer] extract_line: %s", e)
@@ -524,7 +504,10 @@ class Map2DTab(QWidget):
         )
         if not path:
             return
-        info = self.field.plane_slice(self._component(), self.slice_slider.value())
+        slice_idx = 0
+        if hasattr(self, "_get_slice_index"):
+            slice_idx = self._get_slice_index()
+        info = self.field.plane_slice(self._component(), slice_idx)
         lines = ["axis2\\axis1," + ",".join(f"{a:.4f}" for a in info["a1"])]
         for j, b in enumerate(info["a2"]):
             cells = [
