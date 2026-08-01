@@ -34,7 +34,8 @@ from .map2d_tab import COLORMAPS
 ACTOR_POSITIVE = "nics_icss_positive"
 ACTOR_NEGATIVE = "nics_icss_negative"
 ACTOR_PLANE = "nics_map_plane"
-ALL_ACTORS = (ACTOR_POSITIVE, ACTOR_NEGATIVE, ACTOR_PLANE)
+ACTOR_CUT_AXIS = "nics_cut_axis"
+ALL_ACTORS = (ACTOR_POSITIVE, ACTOR_NEGATIVE, ACTOR_PLANE, ACTOR_CUT_AXIS)
 
 
 def structured_grid(data, origin, steps):
@@ -132,6 +133,11 @@ class Icss3DTab(QWidget):
         self.show_negative = QCheckBox("Diatropic (-)")
         self.show_negative.setChecked(True)
         grid.addWidget(self.show_negative, 2, 3)
+        
+        self.show_cut_axis = QCheckBox("Cut axis preview")
+        self.show_cut_axis.setChecked(True)
+        self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
+        grid.addWidget(self.show_cut_axis, 3, 2)
 
         grid.addWidget(QLabel("Colormap:"), 3, 0)
         self.cmap = QComboBox()
@@ -312,6 +318,8 @@ class Icss3DTab(QWidget):
             self._actors.add(name)
             drawn += 1
 
+        self.update_cut_axis_preview()
+
         plotter.render()
         if drawn == 0:
             self.status.setText(
@@ -322,6 +330,45 @@ class Icss3DTab(QWidget):
                 f"Drew {drawn} isosurface(s) at +/-{level:.2f} ppm "
                 f"on a {'x'.join(str(n) for n in cube.shape)} grid."
             )
+
+    def update_cut_axis_preview(self, *_):
+        """Update the arrow showing the current slice axis for 3D volumes."""
+        if pv is None:
+            return
+        plotter = self._plotter()
+        if plotter is None:
+            return
+            
+        self._remove(plotter, ACTOR_CUT_AXIS)
+
+        # Draw cut axis arrow for volumes if checked
+        if self.show_cut_axis.isChecked() and self.field.is_gridded and self.field.layout["kind"] == "volume":
+            stack_idx = self.field.stack_axis_index()
+            if stack_idx is not None:
+                axes = self.field.layout["axes"]
+                coords = self.field.layout["coords"]
+                
+                # center of the grid
+                center_pt = self.field.layout["origin"] + sum(axes[a] * np.mean(coords[a]) for a in range(3))
+                
+                direction = axes[stack_idx]
+                length = (coords[stack_idx][-1] - coords[stack_idx][0]) if len(coords[stack_idx]) > 1 else 5.0
+                
+                # Center the arrow
+                start = center_pt - direction * (length / 2)
+                arrow = pv.Arrow(start=start, direction=direction, scale=length)
+                
+                plotter.add_mesh(
+                    arrow,
+                    color="#ff9900",
+                    name=ACTOR_CUT_AXIS,
+                    show_scalar_bar=False,
+                )
+                self._actors.add(ACTOR_CUT_AXIS)
+        try:
+            plotter.render()
+        except Exception:
+            pass
 
     def show_plane(self, component, slice_index):
         """Drop one map slice into the 3D viewer as a coloured plane."""

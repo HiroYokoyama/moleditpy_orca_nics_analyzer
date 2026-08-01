@@ -28,6 +28,7 @@ class NicsField:
         self.filename = getattr(parser, "filename", None)
         self.axis_mode = axis_mode
         self.custom_axis = custom_axis
+        self._override_stack_axis = None
 
         data = parser.data
         self.warnings = list(data.get("warnings", []))
@@ -68,6 +69,9 @@ class NicsField:
         read as slices parallel to the ring, and picking by index or by point
         count instead would slice a cubic grid edge-on.
         """
+        if self._override_stack_axis is not None:
+            return self._override_stack_axis
+
         layout = self.layout
         shape = layout.get("shape")
         if layout["kind"] == "plane":
@@ -80,6 +84,11 @@ class NicsField:
         if layout["kind"] == "line":
             return 0
         return None
+
+    def set_stack_axis(self, axis_index):
+        """Override the axis used for slicing a 3D volume into 2D maps."""
+        if axis_index in (0, 1, 2, None):
+            self._override_stack_axis = axis_index
 
     @property
     def mean_ring_normal(self):

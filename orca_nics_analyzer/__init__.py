@@ -14,7 +14,7 @@ import logging
 import os
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.3.7"
+PLUGIN_VERSION = "0.3.8"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "

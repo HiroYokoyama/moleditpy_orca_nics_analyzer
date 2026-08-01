@@ -242,6 +242,10 @@ class NicsAnalyzerDialog(QDialog):
             lambda c: self.map_tab.auto_range.setChecked(c) if self.map_tab.auto_range.isChecked() != c else None
         )
 
+        self.map_tab.stack_axis_combo.currentIndexChanged.connect(
+            lambda _: self.icss_tab.update_cut_axis_preview()
+        )
+
         self.summary = QTextEdit()
         self.summary.setReadOnly(True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))

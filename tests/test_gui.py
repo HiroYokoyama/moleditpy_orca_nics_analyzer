@@ -633,7 +633,8 @@ class TestIcssTab:
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
         dialog.icss_tab.draw()
-        assert fake_plotter.add_mesh.call_count == 2
+        # 2 isosurfaces + 1 cut axis preview
+        assert fake_plotter.add_mesh.call_count == 3
         assert "isosurface" in dialog.icss_tab.status.text()
 
     def test_one_sign_only(self, make_dialog, volume_out, fake_plotter):
@@ -641,7 +642,8 @@ class TestIcssTab:
         dialog = make_dialog(volume_out)
         dialog.icss_tab.show_positive.setChecked(False)
         dialog.icss_tab.draw()
-        assert fake_plotter.add_mesh.call_count == 1
+        # 1 isosurface + 1 cut axis preview
+        assert fake_plotter.add_mesh.call_count == 2
 
     def test_cmap_and_span_uses_tab_controls(self, make_dialog, volume_out):
         pytest.importorskip("pyvista")
@@ -771,6 +773,22 @@ class TestTabSync:
         dlg.icss_tab.auto_range.setChecked(True)
         assert dlg.map_tab.auto_range.isChecked()
 
+
+    def test_stack_axis_syncs_to_3d_viewer(self, make_dialog, volume_out, fake_plotter):
+        pytest.importorskip("pyvista")
+        dlg = make_dialog(volume_out)
+        
+        # Change stack axis on map tab
+        dlg.map_tab.stack_axis_combo.setCurrentIndex(1)
+        
+        # Verify it updated the field
+        assert dlg.field.stack_axis_index() == 1
+        
+        # Verify it called the 3d tab's update method (which calls add_mesh)
+        # We can't directly check the arrow easily, but we know add_mesh was called
+        # more than just during draw(). Actually, it triggers update_cut_axis_preview
+        # which removes and adds ACTOR_CUT_AXIS.
+        assert fake_plotter.add_mesh.called
 
 class TestAxisSwitching:
     def test_changing_the_axis_updates_every_tab(self, make_dialog, single_out):
