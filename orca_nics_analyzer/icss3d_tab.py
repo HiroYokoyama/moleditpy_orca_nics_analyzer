@@ -203,6 +203,33 @@ class Icss3DTab(QWidget):
             logging.warning("[orca_nics_analyzer] no plotter: %s", e)
             return None
 
+    def _cmap_and_span(self):
+        try:
+            map_tab = self.parent().map_tab
+            cmap = map_tab.cmap.currentText()
+            span = map_tab.vmax.value()
+            auto = map_tab.auto_range.isChecked()
+            return cmap, span, auto
+        except AttributeError:
+            return "seismic", 10.0, True
+
+    def _isosurface_colors(self):
+        cmap_name, _, _ = self._cmap_and_span()
+        try:
+            import matplotlib.colors as mcolors
+            try:
+                from matplotlib import colormaps
+                cmap = colormaps[cmap_name]
+            except ImportError:
+                from matplotlib import cm
+                cmap = cm.get_cmap(cmap_name)
+
+            color_neg = mcolors.to_hex(cmap(0.0))
+            color_pos = mcolors.to_hex(cmap(1.0))
+            return color_neg, color_pos
+        except Exception:
+            return "#3c6ec8", "#c8463c"
+
     def draw(self):
         if pv is None:
             QMessageBox.information(
@@ -236,9 +263,10 @@ class Icss3DTab(QWidget):
         opacity = self.opacity.value()
 
         drawn = 0
+        color_neg, color_pos = self._isosurface_colors()
         for enabled, value, colour, name in (
-            (self.show_negative.isChecked(), -level, "#3c6ec8", ACTOR_NEGATIVE),
-            (self.show_positive.isChecked(), level, "#c8463c", ACTOR_POSITIVE),
+            (self.show_negative.isChecked(), -level, color_neg, ACTOR_NEGATIVE),
+            (self.show_positive.isChecked(), level, color_pos, ACTOR_POSITIVE),
         ):
             if not enabled:
                 continue
@@ -299,12 +327,15 @@ class Icss3DTab(QWidget):
         plane["NICS"] = np.nan_to_num(values, nan=0.0).ravel(order="F")
 
         finite = values[np.isfinite(values)]
-        span = float(np.max(np.abs(finite))) if finite.size else 1.0
+        cmap, span, auto = self._cmap_and_span()
+        if auto:
+            span = float(np.max(np.abs(finite))) if finite.size else 1.0
+
         self._remove(plotter, ACTOR_PLANE)
         plotter.add_mesh(
             plane,
             scalars="NICS",
-            cmap="seismic",
+            cmap=cmap,
             clim=(-span, span),
             opacity=0.85,
             name=ACTOR_PLANE,
