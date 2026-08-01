@@ -36,7 +36,14 @@ ACTOR_POSITIVE = "nics_icss_positive"
 ACTOR_NEGATIVE = "nics_icss_negative"
 ACTOR_PLANE = "nics_map_plane"
 ACTOR_CUT_AXIS = "nics_cut_axis"
-ALL_ACTORS = (ACTOR_POSITIVE, ACTOR_NEGATIVE, ACTOR_PLANE, ACTOR_CUT_AXIS)
+ACTOR_CUT_AXIS_EDGE = "nics_cut_axis_edge"
+ALL_ACTORS = (
+    ACTOR_POSITIVE,
+    ACTOR_NEGATIVE,
+    ACTOR_PLANE,
+    ACTOR_CUT_AXIS,
+    ACTOR_CUT_AXIS_EDGE,
+)
 
 
 def structured_grid(data, origin, steps):
@@ -483,7 +490,7 @@ class Icss3DTab(QWidget):
             return
 
         self._remove(plotter, ACTOR_CUT_AXIS)
-        self._remove(plotter, ACTOR_CUT_AXIS + "_edge")
+        self._remove(plotter, ACTOR_CUT_AXIS_EDGE)
 
         # Draw cut axis plane for volumes if checked
         if (
@@ -559,10 +566,10 @@ class Icss3DTab(QWidget):
                     plane.extract_feature_edges(),
                     color="#ff9900",
                     line_width=2,
-                    name=ACTOR_CUT_AXIS + "_edge",
+                    name=ACTOR_CUT_AXIS_EDGE,
                 )
                 self._actors.add(ACTOR_CUT_AXIS)
-                self._actors.add(ACTOR_CUT_AXIS + "_edge")
+                self._actors.add(ACTOR_CUT_AXIS_EDGE)
         try:
             plotter.render()
         except Exception as e:  # host renderers may fail after widget teardown

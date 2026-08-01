@@ -940,6 +940,7 @@ class TestIcssTab:
     def test_clear_removes_every_actor(self, make_dialog, volume_out, fake_plotter):
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
+        dialog.icss_tab.show_cut_axis.setChecked(True)
         dialog.icss_tab.draw()
         fake_plotter.reset_mock()
         dialog.icss_tab.clear_actors()
