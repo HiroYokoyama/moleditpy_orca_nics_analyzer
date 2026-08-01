@@ -8,7 +8,7 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("PyQt6.QtWidgets")
 
-from PyQt6.QtCore import QMimeData, QUrl
+from PyQt6.QtCore import QMimeData, QUrl  # noqa: E402
 
 from orca_nics_analyzer.parser import NicsParser  # noqa: E402
 from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block  # noqa: E402
@@ -219,7 +219,7 @@ class TestOpening:
         from orca_nics_analyzer.analysis import NicsField
 
         try:
-            field = NicsField(parser)
+            NicsField(parser)
         except Exception:
             # no_ghosts_out has no probes — default tab is Probes.
             pass
@@ -259,7 +259,9 @@ class TestMoleculeLoading:
         make_dialog(volume_out)
         fake_context.show_xyz_data.assert_called_once()
 
-    def test_reset_camera_called_on_file_load(self, make_dialog, volume_out, fake_plotter):
+    def test_reset_camera_called_on_file_load(
+        self, make_dialog, volume_out, fake_plotter
+    ):
         make_dialog(volume_out)
         fake_plotter.reset_camera.assert_called_once()
 
@@ -651,7 +653,7 @@ class TestIcssTab:
         dialog.icss_tab.cmap.setCurrentText("RdBu_r")
         dialog.icss_tab.vmax.setValue(15.5)
         dialog.icss_tab.auto_range.setChecked(False)
-        
+
         cmap, span, auto = dialog.icss_tab._cmap_and_span()
         assert cmap == "RdBu_r"
         assert span == 15.5
@@ -660,10 +662,10 @@ class TestIcssTab:
     def test_vmax_disabled_when_auto(self, make_dialog, volume_out):
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)
-        
+
         dialog.icss_tab.auto_range.setChecked(True)
         assert not dialog.icss_tab.vmax.isEnabled()
-        
+
         dialog.icss_tab.auto_range.setChecked(False)
         assert dialog.icss_tab.vmax.isEnabled()
 
@@ -743,52 +745,52 @@ class TestIcssTab:
 class TestTabSync:
     def test_cmap_syncs_bidirectionally(self, make_dialog, volume_out):
         dlg = make_dialog(volume_out)
-        
+
         # Change on map tab
         dlg.map_tab.cmap.setCurrentText("RdBu_r")
         assert dlg.icss_tab.cmap.currentText() == "RdBu_r"
-        
+
         # Change on icss tab
         dlg.icss_tab.cmap.setCurrentText("coolwarm")
         assert dlg.map_tab.cmap.currentText() == "coolwarm"
 
     def test_vmax_syncs_bidirectionally(self, make_dialog, volume_out):
         dlg = make_dialog(volume_out)
-        
+
         # Turn off auto range so it doesn't immediately overwrite our manual values
         dlg.map_tab.auto_range.setChecked(False)
-        
+
         dlg.map_tab.vmax.setValue(42.0)
         assert dlg.icss_tab.vmax.value() == 42.0
-        
+
         dlg.icss_tab.vmax.setValue(17.5)
         assert dlg.map_tab.vmax.value() == 17.5
 
     def test_auto_range_syncs_bidirectionally(self, make_dialog, volume_out):
         dlg = make_dialog(volume_out)
-        
+
         dlg.map_tab.auto_range.setChecked(False)
         assert not dlg.icss_tab.auto_range.isChecked()
-        
+
         dlg.icss_tab.auto_range.setChecked(True)
         assert dlg.map_tab.auto_range.isChecked()
-
 
     def test_stack_axis_syncs_to_3d_viewer(self, make_dialog, volume_out, fake_plotter):
         pytest.importorskip("pyvista")
         dlg = make_dialog(volume_out)
-        
+
         # Change stack axis on map tab
         dlg.map_tab.stack_axis_combo.setCurrentIndex(1)
-        
+
         # Verify it updated the field
         assert dlg.field.stack_axis_index() == 1
-        
+
         # Verify it called the 3d tab's update method (which calls add_mesh)
         # We can't directly check the arrow easily, but we know add_mesh was called
         # more than just during draw(). Actually, it triggers update_cut_axis_preview
         # which removes and adds ACTOR_CUT_AXIS.
         assert fake_plotter.add_mesh.called
+
 
 class TestAxisSwitching:
     def test_changing_the_axis_updates_every_tab(self, make_dialog, single_out):
@@ -904,7 +906,6 @@ class TestScan1DSlice:
         return field.extract_line("iso", 0, 0)
 
     def test_show_slice_switches_to_slice_mode(self, make_dialog, plane_out):
-        from orca_nics_analyzer.parser import NicsParser
         from orca_nics_analyzer.analysis import load_field
 
         dlg = make_dialog(plane_out)
@@ -1010,7 +1011,7 @@ class TestMap2DSliceControls:
         dlg = make_dialog(plane_out)
         field = load_field(plane_out)
         info = field.plane_data("iso")
-        dlg.map_tab._slice1d_axis.setCurrentIndex(0)   # fix axis-1, walk axis-2
+        dlg.map_tab._slice1d_axis.setCurrentIndex(0)  # fix axis-1, walk axis-2
         dlg.map_tab._emit_slice_to_1d()
         n_a2 = len(info["a2"])
         assert len(dlg.scan_tab._slice_data["distance"]) == n_a2
@@ -1054,4 +1055,3 @@ class TestMap2DSliceControls:
         dlg.map_tab._emit_slice_to_1d()
         # scan_tab must not be poisoned with bad data.
         assert dlg.scan_tab._slice_data is None
-
