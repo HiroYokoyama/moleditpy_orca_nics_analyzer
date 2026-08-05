@@ -44,6 +44,23 @@ def real_out():
     return sample("real_benzene_nmr_orca5.out")
 
 
+@pytest.fixture(autouse=True)
+def isolated_settings(tmp_path, monkeypatch):
+    """Keep the user's real preferences file out of the test run.
+
+    A dialog built without an explicit ``settings_file`` falls back to the one
+    inside the package, so closing it in a test would rewrite what the user
+    last chose in the app — and leak that state into the next test.
+    """
+    try:
+        from orca_nics_analyzer import gui, settings
+    except ImportError:  # PyQt6 is optional in the bare-pytest CI tier
+        return
+    path = str(tmp_path / "test_settings.json")
+    monkeypatch.setattr(settings, "SETTINGS_FILE", path)
+    monkeypatch.setattr(gui, "SETTINGS_FILE", path)
+
+
 @pytest.fixture(scope="session")
 def qapp():
     """One QApplication for the whole session; skips when PyQt6 is absent."""
