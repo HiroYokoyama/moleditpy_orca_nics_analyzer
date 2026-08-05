@@ -529,8 +529,6 @@ class NicsAnalyzerDialog(QDialog):
         self._set_combo_data(self.map_tab.component, settings["map_component"])
         self.map_tab.cmap.setCurrentText(settings["map_colormap"])
         self.map_tab.levels.setValue(int(settings["map_levels"]))
-        self.map_tab.auto_range.setChecked(bool(settings["map_auto_range"]))
-        self.map_tab.vmax.setValue(float(settings["map_range"]))
         self.map_tab.show_molecule.setChecked(bool(settings["map_molecule"]))
         self.map_tab.show_contours.setChecked(bool(settings["map_contours"]))
         self.map_tab.show_probes.setChecked(bool(settings["map_probes"]))
@@ -550,8 +548,6 @@ class NicsAnalyzerDialog(QDialog):
             "map_component": self.map_tab.component.currentData(),
             "map_colormap": self.map_tab.cmap.currentText(),
             "map_levels": self.map_tab.levels.value(),
-            "map_range": self.map_tab.vmax.value(),
-            "map_auto_range": self.map_tab.auto_range.isChecked(),
             "map_molecule": self.map_tab.show_molecule.isChecked(),
             "map_contours": self.map_tab.show_contours.isChecked(),
             "map_probes": self.map_tab.show_probes.isChecked(),

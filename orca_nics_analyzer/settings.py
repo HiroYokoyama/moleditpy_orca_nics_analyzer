@@ -1,11 +1,16 @@
 """Persistent user preferences for the ORCA NICS Analyzer plugin.
 
-Only molecule-independent choices belong here — colormaps, ranges, which
-overlays are on. The NICS_zz axis is deliberately *not* among them: the
-manual vector and the lab X/Y/Z modes only mean anything relative to one
-structure's own orientation, so carrying them into the next file would
-silently project it onto a direction the user never chose for it. Every
-load therefore starts from the ICSS convention.
+Only molecule-independent choices belong here — colormaps, which overlays
+are on, how many contour levels. Two kinds of value are deliberately left
+out because they only mean something for the structure they were picked on:
+
+* The NICS_zz axis (mode and manual vector). Lab X/Y/Z and a hand-typed
+  direction are relative to one geometry's own orientation, so carrying
+  them over would project the next file onto a direction the user never
+  chose for it. Every load starts from the ICSS convention.
+* The ppm scales (map range, ICSS isovalue). Both are sized from the data
+  itself, and a threshold that frames one molecule's ring current can be
+  orders of magnitude wrong for the next.
 """
 
 import json
@@ -23,8 +28,6 @@ DEFAULT_SETTINGS = {
     "map_component": "zz",
     "map_colormap": "seismic",
     "map_levels": 31,
-    "map_range": 10.0,
-    "map_auto_range": True,
     "map_molecule": True,
     "map_contours": True,
     "map_probes": False,
