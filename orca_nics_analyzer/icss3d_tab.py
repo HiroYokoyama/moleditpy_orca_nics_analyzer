@@ -164,7 +164,7 @@ class Icss3DTab(QWidget):
         grid.addWidget(QLabel("Colormap:"), 3, 0)
         self.cmap = QComboBox()
         self.cmap.addItems(COLORMAPS)
-        self.cmap.currentIndexChanged.connect(self.draw)
+        self.cmap.currentIndexChanged.connect(self._maybe_draw)
         grid.addWidget(self.cmap, 3, 1)
 
         layout.addWidget(controls)
@@ -337,9 +337,11 @@ class Icss3DTab(QWidget):
         self._update_cache_label()
 
     def _maybe_draw(self, *_):
+        # silent: a control change must never raise a modal, or picking a
+        # colormap on a non-volume layout would pop the "needs a volume" box.
         if not self._ui_ready:
             return
-        self.draw()
+        self.draw(silent=True)
 
     def _auto_isovalue(self):
         """A tenth of the peak magnitude usually frames the ring-current lobes."""
@@ -434,7 +436,9 @@ class Icss3DTab(QWidget):
         component = self.component.currentData()
         cube, origin, steps = self.field.grid(component)
         if np.count_nonzero(np.isfinite(cube)) < 8:
-            QMessageBox.information(self, "3D view", "Not enough data to contour.")
+            if not silent:
+                QMessageBox.information(self, "3D view", "Not enough data to contour.")
+            self.status.setText("Not enough finite probe values to contour.")
             return
 
         # Persist the rendered component beside the source output. This is

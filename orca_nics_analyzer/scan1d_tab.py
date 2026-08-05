@@ -79,22 +79,22 @@ class Scan1DTab(QWidget):
         self.show_zz = QCheckBox("NICS_zz")
         self.show_zz.setChecked(self.field.has_tensors)
         self.show_zz.setEnabled(self.field.has_tensors)
-        self.show_zz.toggled.connect(self.refresh)
+        self.show_zz.toggled.connect(self._on_control_changed)
         row.addWidget(self.show_zz)
 
         self.show_iso = QCheckBox("NICS(iso)")
         self.show_iso.setChecked(True)
-        self.show_iso.toggled.connect(self.refresh)
+        self.show_iso.toggled.connect(self._on_control_changed)
         row.addWidget(self.show_iso)
 
         self.mark_extremum = QCheckBox("Mark extremum")
         self.mark_extremum.setChecked(True)
-        self.mark_extremum.toggled.connect(self.refresh)
+        self.mark_extremum.toggled.connect(self._on_control_changed)
         row.addWidget(self.mark_extremum)
 
         self.show_points = QCheckBox("Probe markers")
         self.show_points.setChecked(True)
-        self.show_points.toggled.connect(self.refresh)
+        self.show_points.toggled.connect(self._on_control_changed)
         row.addWidget(self.show_points)
 
         self._clear_slice_btn = QPushButton("← Back to scan")
@@ -143,6 +143,11 @@ class Scan1DTab(QWidget):
         self.refresh(force=True)
 
     # -- drawing ---------------------------------------------------------
+
+    def _on_control_changed(self, *_):
+        # Swallows the signal argument, which would otherwise land in *force*
+        # and make a hidden tab redraw or not depending on the widget's value.
+        self.refresh()
 
     def refresh(self, force=False):
         if not force and not self._is_tab_visible():

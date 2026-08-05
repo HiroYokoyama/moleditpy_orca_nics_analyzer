@@ -743,6 +743,29 @@ class TestIcssTab:
         dialog.icss_tab.draw()
         assert any("Isosurfaces need" in message for _, message in no_modals)
 
+    def test_colormap_change_never_pops_a_modal(
+        self, make_dialog, plane_out, no_modals
+    ):
+        """A control change must not nag about the layout it cannot draw."""
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(plane_out)
+        dialog.tabs.setCurrentWidget(dialog.icss_tab)
+        dialog.icss_tab.cmap.setCurrentIndex(1)
+        no_modals.clear()
+        # Index 0 is the one that used to leak through as ``silent=0``.
+        dialog.icss_tab.cmap.setCurrentIndex(0)
+        assert no_modals == []
+
+    def test_control_changes_never_pop_a_modal(self, make_dialog, plane_out, no_modals):
+        pytest.importorskip("pyvista")
+        dialog = make_dialog(plane_out)
+        dialog.tabs.setCurrentWidget(dialog.icss_tab)
+        no_modals.clear()
+        dialog.icss_tab.opacity.setValue(0.4)
+        dialog.icss_tab.show_positive.setChecked(False)
+        dialog.icss_tab.isovalue.setValue(2.0)
+        assert no_modals == []
+
     def test_missing_plotter_is_handled(self, make_dialog, volume_out):
         pytest.importorskip("pyvista")
         dialog = make_dialog(volume_out)

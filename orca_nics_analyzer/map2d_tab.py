@@ -99,20 +99,20 @@ class Map2DTab(QWidget):
                 "This output has no shielding tensors, so only isotropic NICS "
                 "is available."
             )
-        self.component.currentIndexChanged.connect(self.refresh)
+        self.component.currentIndexChanged.connect(self._on_control_changed)
         grid.addWidget(self.component, 0, 1)
 
         grid.addWidget(QLabel("Colormap:"), 0, 2)
         self.cmap = QComboBox()
         self.cmap.addItems(COLORMAPS)
-        self.cmap.currentIndexChanged.connect(self.refresh)
+        self.cmap.currentIndexChanged.connect(self._on_control_changed)
         grid.addWidget(self.cmap, 0, 3)
 
         grid.addWidget(QLabel("Levels:"), 0, 4)
         self.levels = QSpinBox()
         self.levels.setRange(5, 101)
         self.levels.setValue(31)
-        self.levels.valueChanged.connect(self.refresh)
+        self.levels.valueChanged.connect(self._on_control_changed)
         grid.addWidget(self.levels, 0, 5)
 
         grid.addWidget(QLabel("Range +/- ppm:"), 1, 0)
@@ -120,7 +120,7 @@ class Map2DTab(QWidget):
         self.vmax.setRange(0.1, 1000.0)
         self.vmax.setDecimals(2)
         self.vmax.setSingleStep(1.0)
-        self.vmax.valueChanged.connect(self.refresh)
+        self.vmax.valueChanged.connect(self._on_control_changed)
         grid.addWidget(self.vmax, 1, 1)
 
         self.auto_range = QCheckBox("Auto")
@@ -130,17 +130,17 @@ class Map2DTab(QWidget):
 
         self.show_molecule = QCheckBox("Molecule outline")
         self.show_molecule.setChecked(True)
-        self.show_molecule.toggled.connect(self.refresh)
+        self.show_molecule.toggled.connect(self._on_control_changed)
         grid.addWidget(self.show_molecule, 1, 3)
 
         self.show_contours = QCheckBox("Contour lines")
         self.show_contours.setChecked(True)
-        self.show_contours.toggled.connect(self.refresh)
+        self.show_contours.toggled.connect(self._on_control_changed)
         grid.addWidget(self.show_contours, 1, 4)
 
         self.show_probes = QCheckBox("Probe dots")
         self.show_probes.setChecked(False)
-        self.show_probes.toggled.connect(self.refresh)
+        self.show_probes.toggled.connect(self._on_control_changed)
         grid.addWidget(self.show_probes, 1, 5)
 
         # Slice controls moved to 3D tab per user request
@@ -183,7 +183,7 @@ class Map2DTab(QWidget):
 
         self.show_1d_line = QCheckBox("Show line in map")
         self.show_1d_line.setChecked(False)
-        self.show_1d_line.toggled.connect(self.refresh)
+        self.show_1d_line.toggled.connect(self._on_control_changed)
         s1d.addWidget(self.show_1d_line)
 
         layout.addWidget(slice1d_group)
@@ -260,6 +260,11 @@ class Map2DTab(QWidget):
 
     def _component(self):
         return self.component.currentData() if hasattr(self, "component") else "zz"
+
+    def _on_control_changed(self, *_):
+        # Swallows the signal argument, which would otherwise land in *force*
+        # and make a hidden tab redraw or not depending on the widget's value.
+        self.refresh()
 
     # -- drawing ---------------------------------------------------------
     def refresh(self, force=False):
