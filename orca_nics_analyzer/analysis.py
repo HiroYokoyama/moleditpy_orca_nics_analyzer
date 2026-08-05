@@ -78,17 +78,14 @@ class NicsField:
                 raise ValueError("custom NICS_zz axis must be non-zero")
 
     # -- axes ------------------------------------------------------------
-    def stack_axis_index(self):
-        """Which lattice axis the grid is sliced along.
+    def natural_stack_axis_index(self):
+        """The layout's own slab axis, ignoring any viewing override.
 
         For a plane it is the flat axis. For a volume it is the axis most
         parallel to the molecule's ring normal — an ICSS map is conventionally
         read as slices parallel to the ring, and picking by index or by point
         count instead would slice a cubic grid edge-on.
         """
-        if self._override_stack_axis is not None:
-            return self._override_stack_axis
-
         layout = self.layout
         shape = layout.get("shape")
         if layout["kind"] == "plane":
@@ -102,16 +99,20 @@ class NicsField:
             return 0
         return None
 
+    def stack_axis_index(self):
+        """Which lattice axis the 2D view slices along; the user may override it."""
+        if self._override_stack_axis is not None:
+            return self._override_stack_axis
+        return self.natural_stack_axis_index()
+
     def set_stack_axis(self, axis_index):
-        """Override the axis used for slicing a 3D volume into 2D maps."""
-        if axis_index not in (0, 1, 2, None):
-            return
-        if axis_index == self._override_stack_axis:
-            return
-        self._override_stack_axis = axis_index
-        # In "grid" mode the stack axis *is* the NICS_zz direction, so every
-        # projection has to be redone against the new normal.
-        self.set_axis_mode(self.axis_mode, self.custom_axis)
+        """Choose the axis a 3D volume is sliced along for the 2D map.
+
+        Purely a viewing choice: it never moves the NICS_zz axis, so the
+        numbers do not change when the user re-slices the same volume.
+        """
+        if axis_index in (0, 1, 2, None):
+            self._override_stack_axis = axis_index
 
     @property
     def mean_ring_normal(self):
@@ -128,11 +129,16 @@ class NicsField:
 
     @property
     def grid_normal(self):
-        """Normal of the probe plane/slab, or None when the probes are not planar."""
+        """Normal of the probe plane/slab, or None when the probes are not planar.
+
+        Deliberately the layout's *natural* slab axis, not the one the 2D view
+        happens to be sliced along: re-slicing a volume is a viewing choice and
+        must not rotate the direction NICS_zz is projected onto.
+        """
         if self.layout["kind"] == "line":
             return self.layout["axes"][0]
         if self.layout["kind"] in ("plane", "volume"):
-            return self.layout["axes"][self.stack_axis_index()]
+            return self.layout["axes"][self.natural_stack_axis_index()]
         return None
 
     def axis_for(self, probe):

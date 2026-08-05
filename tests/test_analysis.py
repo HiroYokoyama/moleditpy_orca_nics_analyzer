@@ -12,7 +12,6 @@ import pytest
 np = pytest.importorskip("numpy")
 
 from orca_nics_analyzer import cube_io  # noqa: E402
-from orca_nics_analyzer import nics_math as nm  # noqa: E402
 from orca_nics_analyzer.analysis import export_all, load_field  # noqa: E402
 from make_fixtures import ISO_K, RING_K, shielding_tensor  # noqa: E402
 
@@ -97,29 +96,35 @@ class TestAxisModes:
         with pytest.raises(ValueError, match="component"):
             field.values("anisotropy")
 
-    def test_changing_the_stack_axis_reprojects_zz(self, volume_out):
-        """In grid mode the cut axis *is* the NICS_zz axis."""
-        field = load_field(volume_out)
+    @pytest.mark.parametrize("mode", ["grid", "ring", "z"])
+    @pytest.mark.parametrize("cut", [0, 1, 2])
+    def test_reslicing_never_moves_the_nics_zz_axis(self, volume_out, mode, cut):
+        """Choosing a cut axis is a viewing choice, not a physical one."""
+        field = load_field(volume_out, axis_mode=mode)
         before = field.values("zz").copy()
-        field.set_stack_axis(1)
-        after = field.values("zz")
-        expected = [nm.nics_zz(p["entry"], field.axis_for(p)) for p in field.probes]
-        assert not np.allclose(before, after)
-        assert np.allclose(after, expected)
+        axis_before = field.axis_for(field.probes[0]).copy()
+        field.set_stack_axis(cut)
+        assert np.allclose(field.axis_for(field.probes[0]), axis_before)
+        assert np.allclose(field.values("zz"), before, equal_nan=True)
+        assert field.grid_normal is None or np.allclose(
+            field.grid_normal, field.layout["axes"][field.natural_stack_axis_index()]
+        )
 
-    def test_stack_axis_reprojection_survives_an_explicit_axis_mode(self, volume_out):
-        """A lab-axis projection must not move when the cut axis changes."""
-        field = load_field(volume_out, axis_mode="z")
-        before = field.values("zz").copy()
-        field.set_stack_axis(1)
-        assert np.allclose(field.values("zz"), before)
-
-    def test_repeated_stack_axis_set_is_a_no_op(self, volume_out):
+    def test_reslicing_still_moves_the_viewed_plane(self, volume_out):
+        """The guard above must not have frozen the slicing itself."""
         field = load_field(volume_out)
-        field.set_stack_axis(2)
-        once = field.values("zz").copy()
-        field.set_stack_axis(2)
-        assert np.allclose(field.values("zz"), once)
+        field.set_stack_axis(0)
+        first = field.plane_data("iso")
+        field.set_stack_axis(1)
+        second = field.plane_data("iso")
+        assert first["order"] != second["order"]
+        assert not np.allclose(first["normal"], second["normal"])
+
+    def test_stack_axis_override_survives_a_mode_switch(self, volume_out):
+        field = load_field(volume_out)
+        field.set_stack_axis(1)
+        field.set_axis_mode("x")
+        assert field.stack_axis_index() == 1
 
     def test_ring_mode_uses_the_ring_normal(self, single_out):
         field = load_field(single_out, axis_mode="ring")
