@@ -1,4 +1,12 @@
-"""Persistent user preferences for the ORCA NICS Analyzer plugin."""
+"""Persistent user preferences for the ORCA NICS Analyzer plugin.
+
+Only molecule-independent choices belong here — colormaps, ranges, which
+overlays are on. The NICS_zz axis is deliberately *not* among them: the
+manual vector and the lab X/Y/Z modes only mean anything relative to one
+structure's own orientation, so carrying them into the next file would
+silently project it onto a direction the user never chose for it. Every
+load therefore starts from the ICSS convention.
+"""
 
 import json
 import logging
@@ -7,9 +15,10 @@ import os
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
 SETTINGS_KEY = "nics_analyzer_settings"
 
+#: What the NICS_zz axis resets to for every newly loaded output.
+DEFAULT_AXIS_MODE = "grid"
+
 DEFAULT_SETTINGS = {
-    "axis_mode": "grid",
-    "axis_vector": [0.0, 0.0, 1.0],
     "show_probes": False,
     "map_component": "zz",
     "map_colormap": "seismic",
@@ -22,7 +31,6 @@ DEFAULT_SETTINGS = {
     "map_slice_line": False,
     "icss_component": "zz",
     "icss_colormap": "seismic",
-    "icss_isovalue": 5.0,
     "icss_opacity": 0.55,
     "icss_positive": True,
     "icss_negative": True,

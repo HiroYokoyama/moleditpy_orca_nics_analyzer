@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 
 from . import PLUGIN_VERSION
 from .analysis import NicsField, export_all
-from .settings import SETTINGS_FILE, load_settings, save_settings
+from .settings import DEFAULT_AXIS_MODE, SETTINGS_FILE, load_settings, save_settings
 
 #: Label -> axis_mode for the NICS_zz reference direction.
 AXIS_CHOICES = (
@@ -501,24 +501,22 @@ class NicsAnalyzerDialog(QDialog):
 
     def _load_settings(self):
         settings = load_settings(self.settings_file)
-        axis_index = self.axis_combo.findData(settings["axis_mode"])
+        axis_index = self.axis_combo.findData(DEFAULT_AXIS_MODE)
         self.axis_combo.blockSignals(True)
         self._probe_chk.blockSignals(True)
         self._vector_chk.blockSignals(True)
         for spin in self._axis_vector:
             spin.blockSignals(True)
         try:
-            vector = settings.get("axis_vector", [0.0, 0.0, 1.0])
-            if isinstance(vector, (list, tuple)) and len(vector) == 3:
-                for spin, value in zip(self._axis_vector, vector):
-                    spin.setValue(float(value))
+            # The axis belongs to one geometry, so every load resets to the
+            # ICSS convention instead of inheriting the previous molecule's.
+            for spin, value in zip(self._axis_vector, (0.0, 0.0, 1.0)):
+                spin.setValue(value)
             if axis_index >= 0 and self.axis_combo.isEnabled():
                 self.axis_combo.setCurrentIndex(axis_index)
-                self._set_axis_vector_visible(settings["axis_mode"] == "custom")
+                self._set_axis_vector_visible(False)
                 if self.field is not None:
-                    self.field.set_axis_mode(
-                        settings["axis_mode"], self._custom_axis_values()
-                    )
+                    self.field.set_axis_mode(DEFAULT_AXIS_MODE)
             self._probe_chk.setChecked(bool(settings["show_probes"]))
             self._vector_chk.setChecked(bool(settings["icss_show_vector"]))
         finally:
@@ -540,7 +538,6 @@ class NicsAnalyzerDialog(QDialog):
 
         self._set_combo_data(self.icss_tab.component, settings["icss_component"])
         self.icss_tab.cmap.setCurrentText(settings["icss_colormap"])
-        self.icss_tab.isovalue.setValue(float(settings["icss_isovalue"]))
         self.icss_tab.opacity.setValue(float(settings["icss_opacity"]))
         self.icss_tab.show_positive.setChecked(bool(settings["icss_positive"]))
         self.icss_tab.show_negative.setChecked(bool(settings["icss_negative"]))
@@ -549,8 +546,6 @@ class NicsAnalyzerDialog(QDialog):
 
     def _settings_values(self):
         return {
-            "axis_mode": self.axis_combo.currentData(),
-            "axis_vector": list(self._custom_axis_values()),
             "show_probes": self._probe_chk.isChecked(),
             "map_component": self.map_tab.component.currentData(),
             "map_colormap": self.map_tab.cmap.currentText(),
@@ -563,7 +558,6 @@ class NicsAnalyzerDialog(QDialog):
             "map_slice_line": self.map_tab.show_1d_line.isChecked(),
             "icss_component": self.icss_tab.component.currentData(),
             "icss_colormap": self.icss_tab.cmap.currentText(),
-            "icss_isovalue": self.icss_tab.isovalue.value(),
             "icss_opacity": self.icss_tab.opacity.value(),
             "icss_positive": self.icss_tab.show_positive.isChecked(),
             "icss_negative": self.icss_tab.show_negative.isChecked(),

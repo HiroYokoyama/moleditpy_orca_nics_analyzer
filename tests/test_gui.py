@@ -864,6 +864,41 @@ class TestIcssTab:
         dialog = make_dialog(volume_out)
         assert dialog.icss_tab.isovalue.value() > 0
 
+    def test_isovalue_rescales_for_each_molecule(
+        self, fake_context, volume_out, tmp_path
+    ):
+        """A saved ppm isovalue must not override the per-molecule auto-scale."""
+        settings = str(tmp_path / "settings.json")
+
+        def build(scale):
+            parser = NicsParser()
+            parser.load(volume_out)
+            if scale != 1.0:
+                for entry in parser.data["shieldings"].values():
+                    if entry.get("tensor"):
+                        entry["tensor"] = [
+                            [v * scale for v in row] for row in entry["tensor"]
+                        ]
+                    if entry.get("iso") is not None:
+                        entry["iso"] *= scale
+            return NicsAnalyzerDialog(parser, fake_context, settings_file=settings)
+
+        small = build(1.0)
+        first = small.icss_tab.isovalue.value()
+        small.close()  # writes the preferences file
+
+        big = build(100.0)
+        try:
+            peak = float(np.nanmax(np.abs(big.field.values("zz"))))
+            assert big.icss_tab.isovalue.value() == pytest.approx(
+                max(0.05, round(peak / 10.0, 2))
+            )
+            assert big.icss_tab.isovalue.value() > first * 10
+        finally:
+            big.close()
+        saved = json.loads(open(settings, encoding="utf-8").read())
+        assert "icss_isovalue" not in saved["nics_analyzer_settings"]
+
     def test_isovalue_slider_and_spin_stay_in_sync(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
         dialog.icss_tab.isovalue.setValue(4.0)
@@ -1053,7 +1088,8 @@ class TestTabSync:
         first._save_settings()
 
         second = make_dialog(volume_out)
-        assert second.axis_combo.currentData() == "x"
+        # The axis is molecule-specific and deliberately not round-tripped.
+        assert second.axis_combo.currentData() == "grid"
         assert second._probe_chk.isChecked()
         assert second.map_tab.levels.value() == 47
         assert not second.map_tab.show_contours.isChecked()
@@ -1127,7 +1163,8 @@ class TestAxisSwitching:
         assert dialog.field.axis_mode == "custom"
         assert dialog.field.custom_axis == pytest.approx((1.0, 2.0, 3.0))
 
-    def test_manual_axis_vector_is_saved(self, make_dialog, single_out, tmp_path):
+    def test_manual_axis_vector_is_not_saved(self, make_dialog, single_out, tmp_path):
+        """The vector means nothing against the next molecule's geometry."""
         dialog = make_dialog(single_out)
         dialog.axis_combo.setCurrentIndex(dialog.axis_combo.findData("custom"))
         dialog._axis_vector[0].setValue(1.0)
@@ -1135,7 +1172,31 @@ class TestAxisSwitching:
         dialog._axis_vector[2].setValue(3.0)
         dialog.close()
         saved = json.loads((tmp_path / "settings.json").read_text())
-        assert saved["nics_analyzer_settings"]["axis_vector"] == [1.0, 2.0, 3.0]
+        assert "axis_vector" not in saved["nics_analyzer_settings"]
+        assert "axis_mode" not in saved["nics_analyzer_settings"]
+
+    def test_axis_choice_resets_for_each_load(self, make_dialog, single_out, plane_out):
+        """A lab axis picked for one structure must not follow to the next."""
+        dialog = make_dialog(single_out)
+        dialog.axis_combo.setCurrentIndex(dialog.axis_combo.findData("z"))
+        dialog._save_settings()
+        assert dialog.field.axis_mode == "z"
+        assert dialog.load_file(plane_out)
+        assert dialog.axis_combo.currentData() == "grid"
+        assert dialog.field.axis_mode == "grid"
+        assert dialog._custom_axis_values() == pytest.approx((0.0, 0.0, 1.0))
+
+    def test_manual_vector_does_not_follow_to_the_next_molecule(
+        self, make_dialog, single_out, plane_out
+    ):
+        dialog = make_dialog(single_out)
+        dialog.axis_combo.setCurrentIndex(dialog.axis_combo.findData("custom"))
+        for spin, value in zip(dialog._axis_vector, (1.0, 2.0, 3.0)):
+            spin.setValue(value)
+        dialog._save_settings()
+        assert dialog.load_file(plane_out)
+        assert dialog.field.axis_mode == "grid"
+        assert dialog._custom_axis_values() == pytest.approx((0.0, 0.0, 1.0))
 
     def test_axis_is_disabled_without_tensors(
         self, make_dialog, single_out, monkeypatch
