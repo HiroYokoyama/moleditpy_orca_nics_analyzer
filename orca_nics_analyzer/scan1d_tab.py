@@ -201,8 +201,11 @@ class Scan1DTab(QWidget):
             component = "zz" if self.show_zz.isChecked() else "iso"
             where, peak = self.field.scan_extremum(component)
         else:
-            # For an injected slice compute the extremum inline.
-            component = "zz" if self.show_zz.isChecked() else "iso"
+            # An extracted slice only carries the component it was cut for,
+            # so honour that instead of the curve checkboxes.
+            component = data.get("component") or (
+                "zz" if self.show_zz.isChecked() else "iso"
+            )
             values = data[component]
             finite = np.isfinite(values)
             if finite.any():
@@ -288,8 +291,8 @@ class Scan1DTab(QWidget):
                 zz = data["zz"][i]
                 lines.append(
                     f"{i},{dist:.4f},"
-                    f"{''.join(f'{iso:.4f}') if np.isfinite(iso) else ''},"
-                    f"{''.join(f'{zz:.4f}') if np.isfinite(zz) else ''}"
+                    f"{f'{iso:.4f}' if np.isfinite(iso) else ''},"
+                    f"{f'{zz:.4f}' if np.isfinite(zz) else ''}"
                 )
             content = "\n".join(lines) + "\n"
         else:

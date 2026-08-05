@@ -1286,6 +1286,36 @@ class TestScan1DSlice:
         dlg.scan_tab.show_slice(data)
         assert "extracted slice" in dlg.scan_tab.info.text()
 
+    def test_iso_slice_extremum_ignores_the_zz_checkbox(self, make_dialog, plane_out):
+        """An extracted slice only carries its own component."""
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        dlg.scan_tab.show_zz.setChecked(True)
+        data = load_field(plane_out).extract_line("iso", 0, 2)
+        dlg.scan_tab.show_slice(data)
+        assert "largest |NICS(iso)|" in dlg.scan_tab.info.text()
+
+    def test_slice_csv_has_no_stray_join_artifacts(
+        self, make_dialog, plane_out, tmp_path
+    ):
+        from orca_nics_analyzer.analysis import load_field
+
+        dlg = make_dialog(plane_out)
+        field = load_field(plane_out)
+        data = field.extract_line("iso", 0, 2)
+        dlg.scan_tab.show_slice(data)
+        target = str(tmp_path / "slice.csv")
+        with patch(
+            "orca_nics_analyzer.scan1d_tab.QFileDialog.getSaveFileName",
+            return_value=(target, ""),
+        ):
+            dlg.scan_tab.export_csv()
+        rows = open(target, encoding="utf-8").read().splitlines()[1:]
+        first = rows[0].split(",")
+        assert float(first[2]) == pytest.approx(float(data["iso"][0]), abs=1e-4)
+        assert first[3] == ""
+
     def test_slice_csv_export(self, make_dialog, plane_out, tmp_path):
         from orca_nics_analyzer.analysis import load_field
         from unittest.mock import patch
