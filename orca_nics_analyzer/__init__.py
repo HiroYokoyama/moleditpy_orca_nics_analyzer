@@ -145,7 +145,7 @@ def initialize(context):
         _dialog_opened = True
         dlg.show()
 
-    context.add_menu_action("Analysis/ORCA NICS Analyzer...", open_dialog)
+    context.add_menu_action("Extensions/ORCA NICS Analyzer...", open_dialog)
 
     def on_reset():
         win = context.get_window("nics_analyzer")

@@ -59,20 +59,31 @@ class TestInitialize:
         context = MagicMock()
         plugin.initialize(context)
         paths = [c.args[0] for c in context.add_menu_action.call_args_list]
-        assert paths == ["Analysis/ORCA NICS Analyzer..."]
+        assert paths == ["Extensions/ORCA NICS Analyzer..."]
 
-    def test_menu_lands_in_a_menu_the_host_already_has(self):
-        """The host creates a new top-level menu for an unknown name.
+    def test_menu_opens_its_own_top_level_entry(self):
+        """The Extensions menu is not one of the host's native menus.
 
-        It matches on the title with '&' stripped, so "Analysis" joins the
-        native &Analysis menu instead of adding a second one beside it.
+        The host matches top-level titles with '&' stripped and adds a new
+        menu when nothing matches, so this deliberately gets its own entry
+        rather than joining &Analysis or &Plugin.
         """
         from unittest.mock import MagicMock
 
         context = MagicMock()
         plugin.initialize(context)
         top_level = context.add_menu_action.call_args.args[0].split("/")[0]
-        assert top_level in {"File", "Edit", "View", "Analysis", "Plugin", "Settings"}
+        assert top_level == "Extensions"
+        assert top_level not in {
+            "File",
+            "Edit",
+            "View",
+            "Analysis",
+            "3D Edit",
+            "Plugin",
+            "Settings",
+            "Help",
+        }
 
     def test_menu_path_has_no_extra_separator(self):
         """The host splits on '/', so a slash in the leaf would nest a submenu."""
