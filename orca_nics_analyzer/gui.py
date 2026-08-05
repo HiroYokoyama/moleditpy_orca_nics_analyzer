@@ -24,7 +24,13 @@ from PyQt6.QtWidgets import (
 
 from . import PLUGIN_VERSION
 from .analysis import NicsField, export_all
-from .settings import DEFAULT_AXIS_MODE, SETTINGS_FILE, load_settings, save_settings
+from .settings import (
+    DEFAULT_AXIS_MODE,
+    DEFAULT_SETTINGS,
+    SETTINGS_FILE,
+    load_settings,
+    save_settings,
+)
 
 #: Label -> axis_mode for the NICS_zz reference direction.
 AXIS_CHOICES = (
@@ -532,6 +538,11 @@ class NicsAnalyzerDialog(QDialog):
         self._set_combo_data(self.map_tab.component, settings["map_component"])
         self.map_tab.cmap.setCurrentText(settings["map_colormap"])
         self.map_tab.levels.setValue(int(settings["map_levels"]))
+        # Range before the Auto flag: unticking Auto has to find the remembered
+        # value already in place, or the map would redraw at the stale one.
+        self.map_tab.manual_span = float(settings["map_range"])
+        self.map_tab.vmax.setValue(float(settings["map_range"]))
+        self.map_tab.auto_range.setChecked(bool(settings["map_auto_range"]))
         self.map_tab.show_molecule.setChecked(bool(settings["map_molecule"]))
         self.map_tab.show_contours.setChecked(bool(settings["map_contours"]))
         self.map_tab.show_probes.setChecked(bool(settings["map_probes"]))
@@ -551,6 +562,13 @@ class NicsAnalyzerDialog(QDialog):
             "map_component": self.map_tab.component.currentData(),
             "map_colormap": self.map_tab.cmap.currentText(),
             "map_levels": self.map_tab.levels.value(),
+            # Never vmax.value(): while Auto is on that holds a computed span.
+            "map_range": (
+                self.map_tab.manual_span
+                if self.map_tab.manual_span is not None
+                else DEFAULT_SETTINGS["map_range"]
+            ),
+            "map_auto_range": self.map_tab.auto_range.isChecked(),
             "map_molecule": self.map_tab.show_molecule.isChecked(),
             "map_contours": self.map_tab.show_contours.isChecked(),
             "map_probes": self.map_tab.show_probes.isChecked(),

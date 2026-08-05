@@ -211,6 +211,19 @@ class NicsField:
             [np.nan if p[key] is None else p[key] for p in self.probes], dtype=float
         )
 
+    def display_span(self, component):
+        """Symmetric +/- colour range covering the whole field, in ppm.
+
+        Deliberately the whole field and not the slice on screen: scaling each
+        slice to its own maximum gives the same colour a different meaning on
+        every one of them, so slices cannot be compared with each other or
+        with the 3D view of the same data.
+        """
+        values = self.values(component)
+        finite = values[np.isfinite(values)]
+        span = float(np.max(np.abs(finite))) if finite.size else 0.0
+        return span if span > 0 else 1.0
+
     # -- gridded fields --------------------------------------------------
     @property
     def is_gridded(self):

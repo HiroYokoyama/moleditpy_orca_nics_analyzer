@@ -1019,6 +1019,52 @@ class TestIcssTab:
         assert fake_plotter.add_mesh.call_count >= 1
         assert "Map plane added" in dialog.icss_tab.status.text()
 
+    def test_displayed_plane_is_smoothed_but_anchored_on_the_probes(
+        self, make_dialog, volume_out, fake_plotter
+    ):
+        """VTK triangulates each quad, so a coarse plane needs subdividing.
+
+        The subdivision must keep every probe on a grid node, or the 3D plane
+        would smear the measured values instead of just interpolating between
+        them the way the 2D map already does.
+        """
+        pytest.importorskip("pyvista")
+        from orca_nics_analyzer.icss3d_tab import ACTOR_PLANE
+
+        dialog = make_dialog(volume_out)
+        info = dialog.field.plane_slice("zz", 2)
+        fake_plotter.add_mesh.reset_mock()
+        dialog.icss_tab.show_plane("zz", 2)
+        mesh = next(
+            call.args[0]
+            for call in fake_plotter.add_mesh.call_args_list
+            if call.kwargs.get("name") == ACTOR_PLANE
+        )
+
+        n1, n2 = len(info["a1"]), len(info["a2"])
+        assert mesh.dimensions[0] > n1 and mesh.dimensions[1] > n2
+        # Same physical extent, just more samples across it.
+        pts = np.asarray(mesh.points)
+        base = (
+            dialog.field.layout["origin"]
+            + float(dialog.field.layout["coords"][info["order"][2]][2]) * info["normal"]
+        )
+        corners = np.array(
+            [
+                base + x * info["axis1"] + y * info["axis2"]
+                for x in (info["a1"][0], info["a1"][-1])
+                for y in (info["a2"][0], info["a2"][-1])
+            ]
+        )
+        assert np.allclose(pts.min(axis=0), corners.min(axis=0))
+        assert np.allclose(pts.max(axis=0), corners.max(axis=0))
+
+        # Every probe value survives unchanged at its own position.
+        scal = np.asarray(mesh["NICS"]).reshape(mesh.dimensions[:2], order="F")
+        step1 = (mesh.dimensions[0] - 1) // (n1 - 1)
+        step2 = (mesh.dimensions[1] - 1) // (n2 - 1)
+        assert np.allclose(scal[::step1, ::step2], info["values"], equal_nan=True)
+
     def test_switching_to_2d_clears_3d_actors(
         self, make_dialog, volume_out, fake_plotter
     ):
@@ -1096,6 +1142,75 @@ class TestTabSync:
         assert second.icss_tab.opacity.value() == pytest.approx(0.8)
         assert not second.icss_tab.show_negative.isChecked()
 
+    def test_the_colour_range_does_not_move_between_slices(
+        self, make_dialog, volume_out
+    ):
+        """Every slice must mean the same thing by the same colour."""
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        assert dlg.map_tab.auto_range.isChecked()
+
+        seen = set()
+        per_slice = set()
+        for index in range(dlg.icss_tab.slice_slider.maximum() + 1):
+            dlg.icss_tab.slice_slider.setValue(index)
+            dlg.map_tab.refresh(force=True)
+            seen.add(round(dlg.map_tab.vmax.value(), 4))
+            info = dlg.field.plane_slice(dlg.map_tab._component(), index)
+            finite = info["values"][np.isfinite(info["values"])]
+            per_slice.add(round(float(np.max(np.abs(finite))), 4))
+
+        assert len(seen) == 1  # one scale for the whole volume
+        assert len(per_slice) > 1  # ...on data whose slices really do differ
+        assert seen.pop() == pytest.approx(
+            dlg.field.display_span(dlg.map_tab._component()), abs=0.01
+        )
+
+    def test_a_hand_set_range_survives_the_next_load(
+        self, fake_context, volume_out, tmp_path
+    ):
+        """A fixed range is how a weak feature stays visible next to a big core.
+
+        Auto scales to the slice maximum, so a +6 ppm paratropic region sits at
+        ~12% of a +/-52 ppm scale and reads as white. Choosing a narrow range is
+        a deliberate act and has to be remembered.
+        """
+        settings = str(tmp_path / "settings.json")
+
+        def build():
+            parser = NicsParser()
+            parser.load(volume_out)
+            return NicsAnalyzerDialog(parser, fake_context, settings_file=settings)
+
+        first = build()
+        first.map_tab.auto_range.setChecked(False)
+        first.map_tab.vmax.setValue(8.0)
+        first.close()
+
+        second = build()
+        try:
+            assert not second.map_tab.auto_range.isChecked()
+            assert second.map_tab.vmax.value() == pytest.approx(8.0)
+        finally:
+            second.close()
+
+    def test_an_auto_span_is_never_saved_as_a_preference(
+        self, fake_context, volume_out, tmp_path
+    ):
+        """Auto writes its span into the same widget the preference reads."""
+        settings = str(tmp_path / "settings.json")
+        parser = NicsParser()
+        parser.load(volume_out)
+        dlg = NicsAnalyzerDialog(parser, fake_context, settings_file=settings)
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        dlg.map_tab.refresh(force=True)
+        assert dlg.map_tab.auto_range.isChecked()
+        assert dlg.map_tab.vmax.value() > 20.0  # the computed span
+        dlg.close()
+
+        saved = json.loads(open(settings, encoding="utf-8").read())
+        assert saved["nics_analyzer_settings"]["map_range"] == pytest.approx(10.0)
+
     def test_auto_range_reaches_the_3d_plane(self, make_dialog, volume_out):
         """The 2D map and the 3D plane must colour the same slice alike.
 
@@ -1107,11 +1222,7 @@ class TestTabSync:
         dlg.tabs.setCurrentWidget(dlg.map_tab)
         dlg.map_tab.refresh(force=True)
 
-        info = dlg.field.plane_slice(
-            dlg.map_tab._component(), dlg.map_tab._get_slice_index()
-        )
-        finite = info["values"][np.isfinite(info["values"])]
-        data_span = float(np.max(np.abs(finite)))
+        data_span = dlg.field.display_span(dlg.map_tab._component())
         assert data_span > 20.0  # far from the 10.0 default, so a stale value shows
 
         assert dlg.icss_tab._display_span == pytest.approx(data_span, abs=0.01)

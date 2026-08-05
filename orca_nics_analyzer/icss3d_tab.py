@@ -74,6 +74,56 @@ def structured_grid(data, origin, steps):
     return grid
 
 
+#: Points per axis a displayed plane is resampled up to. VTK splits every
+#: quad into two triangles along one diagonal, so on a coarse probe grid the
+#: shading is piecewise-linear on triangles while the 2D map interpolates over
+#: the whole cell — on a 5x5 benzene slice the two disagree by 30% of the
+#: colour span and the diagonal shows. Subdividing removes the artifact.
+_PLANE_SMOOTH_POINTS = 65
+
+
+def _subdivide_axis(coords, target):
+    """Split every interval evenly, keeping the original coordinates as nodes.
+
+    Interval-by-interval rather than one linspace over the whole range: that
+    is what puts the probes exactly on grid nodes for unevenly spaced scans
+    too, so resampling reproduces their values instead of smearing them.
+    """
+    n = len(coords)
+    factor = max(1, -(-(target - 1) // (n - 1)))  # ceil division
+    if factor == 1:
+        return coords
+    parts = [
+        np.linspace(coords[k], coords[k + 1], factor + 1)[:-1] for k in range(n - 1)
+    ]
+    return np.concatenate(parts + [coords[-1:]])
+
+
+def _resample_plane(values, a1, a2, target=_PLANE_SMOOTH_POINTS):
+    """Bilinearly resample a plane onto a finer grid, for display only.
+
+    Two successive 1-D linear interpolations over a rectilinear grid are
+    exactly bilinear, and ``np.interp`` handles unevenly spaced probes. The
+    probe values are reproduced exactly at their own coordinates, so nothing
+    is invented — only what the 2D map already draws between them.
+    """
+    a1 = np.asarray(a1, dtype=float)
+    a2 = np.asarray(a2, dtype=float)
+    if len(a1) < 2 or len(a2) < 2:
+        return values, a1, a2
+
+    fa1 = _subdivide_axis(a1, target)
+    fa2 = _subdivide_axis(a2, target)
+
+    along1 = np.empty((len(fa1), values.shape[1]), dtype=float)
+    for col in range(values.shape[1]):
+        along1[:, col] = np.interp(fa1, a1, values[:, col])
+    out = np.empty((len(fa1), len(fa2)), dtype=float)
+    for row in range(len(fa1)):
+        out[row, :] = np.interp(fa2, a2, along1[row, :])
+    return out, fa1, fa2
+
+
 class Icss3DTab(QWidget):
     """Isovalue controls plus cube generation/caching."""
 
@@ -655,8 +705,10 @@ class Icss3DTab(QWidget):
 
         info = self.field.plane_slice(component, slice_index)
         values = info["values"]
-        a1, a2 = info["a1"], info["a2"]
-        i, j = np.meshgrid(np.arange(len(a1)), np.arange(len(a2)), indexing="ij")
+        smooth, fa1, fa2 = _resample_plane(
+            np.nan_to_num(values, nan=0.0), info["a1"], info["a2"]
+        )
+        i, j = np.meshgrid(np.arange(len(fa1)), np.arange(len(fa2)), indexing="ij")
         base = (
             self.field.layout["origin"]
             + float(self.field.layout["coords"][info["order"][2]][info["slice_index"]])
@@ -664,18 +716,18 @@ class Icss3DTab(QWidget):
         )
         pts = (
             base
-            + (a1[i])[..., None] * info["axis1"]
-            + (a2[j])[..., None] * info["axis2"]
+            + (fa1[i])[..., None] * info["axis1"]
+            + (fa2[j])[..., None] * info["axis2"]
         )
         plane = pv.StructuredGrid()
         plane.points = pts.reshape(-1, 3, order="F")
-        plane.dimensions = (len(a1), len(a2), 1)
-        plane["NICS"] = np.nan_to_num(values, nan=0.0).ravel(order="F")
+        plane.dimensions = (len(fa1), len(fa2), 1)
+        plane["NICS"] = smooth.ravel(order="F")
 
-        finite = values[np.isfinite(values)]
         cmap, span, auto = self._cmap_and_span()
         if auto:
-            span = float(np.max(np.abs(finite))) if finite.size else 1.0
+            # Same whole-field span the 2D map uses, not this slice's own.
+            span = self.field.display_span(component)
 
         self._remove(plotter, ACTOR_PLANE)
         plotter.add_mesh(

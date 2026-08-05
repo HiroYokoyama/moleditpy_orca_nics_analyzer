@@ -11,13 +11,7 @@ def test_no_molecule_specific_value_is_persisted():
     Persisting any of them applies the previous molecule's geometry or
     magnitude to the next one, silently and with no way to tell.
     """
-    forbidden = {
-        "axis_mode",
-        "axis_vector",
-        "map_range",
-        "map_auto_range",
-        "icss_isovalue",
-    }
+    forbidden = {"axis_mode", "axis_vector", "icss_isovalue"}
     assert forbidden.isdisjoint(DEFAULT_SETTINGS)
 
 

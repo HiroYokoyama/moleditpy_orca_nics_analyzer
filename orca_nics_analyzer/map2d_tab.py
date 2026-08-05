@@ -65,6 +65,8 @@ class Map2DTab(QWidget):
         #: Set by the parent dialog to mirror the effective +/- ppm range onto
         #: the 3D plane, which cannot see the auto-computed value otherwise.
         self._on_range_computed = None
+        #: The last range the user typed, which is what gets remembered.
+        self.manual_span = None
         self.canvas = None
         self.figure = None
         self._build_ui()
@@ -123,8 +125,8 @@ class Map2DTab(QWidget):
         self.vmax.setRange(0.1, 1000.0)
         self.vmax.setDecimals(2)
         self.vmax.setSingleStep(1.0)
-        self.vmax.setValue(10.0)  # replaced by the auto span on the first draw
-        self.vmax.valueChanged.connect(self._on_control_changed)
+        self.vmax.setValue(10.0)
+        self.vmax.valueChanged.connect(self._on_vmax_edited)
         grid.addWidget(self.vmax, 1, 1)
 
         self.auto_range = QCheckBox("Auto")
@@ -276,6 +278,16 @@ class Map2DTab(QWidget):
         # and make a hidden tab redraw or not depending on the widget's value.
         self.refresh()
 
+    def _on_vmax_edited(self, value):
+        """Record a hand-typed range as the preference to remember.
+
+        The auto span is written into the same widget with signals blocked,
+        so it never reaches here — which is what keeps a computed number from
+        being saved as if the user had asked for it.
+        """
+        self.manual_span = float(value)
+        self.refresh()
+
     # -- drawing ---------------------------------------------------------
     def refresh(self, force=False):
         if not force and not self._is_tab_visible():
@@ -311,10 +323,10 @@ class Map2DTab(QWidget):
         values = info["values"]
         self._set_slice1d_bounds(info)
 
-        finite = values[np.isfinite(values)]
         if self.auto_range.isChecked():
-            span = float(np.max(np.abs(finite))) if finite.size else 1.0
-            span = span if span > 0 else 1.0
+            # The whole field, so moving the slice slider does not rescale the
+            # colours under the user and the 3D view agrees slice for slice.
+            span = self.field.display_span(component)
             # Blocked: valueChanged would re-enter refresh() through the
             # control wrapper. The 3D side is told separately, below.
             self.vmax.blockSignals(True)
