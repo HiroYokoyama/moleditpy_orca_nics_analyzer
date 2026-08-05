@@ -1367,6 +1367,37 @@ class TestMap2DSliceControls:
         dlg.map_tab._slice1d_axis.setCurrentIndex(1)
         assert dlg.map_tab._slice1d_slider.maximum() == len(info["a2"]) - 1
 
+    def test_slice1d_bounds_follow_the_cut_axis(self, make_dialog, tmp_path):
+        """The in-plane axes swap — and resize — when the cut axis changes."""
+        from make_fixtures import build_output, volume_points
+
+        path = tmp_path / "slab.out"
+        path.write_text(
+            build_output(volume_points(n_xy=7, n_z=3), "non-cubic slab"),
+            encoding="utf-8",
+        )
+        dlg = make_dialog(str(path))
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+
+        # Cut along a 7-point axis so the 3-point one becomes in-plane.
+        new_stack = next(
+            a
+            for a in range(3)
+            if len(dlg.field.layout["coords"][a]) == 7
+            and a != dlg.field.stack_axis_index()
+        )
+        order = [a for a in range(3) if a != new_stack]
+        shrinking = 0 if len(dlg.field.layout["coords"][order[0]]) == 3 else 1
+        dlg.map_tab._slice1d_axis.setCurrentIndex(shrinking)
+        dlg.map_tab._slice1d_slider.setValue(6)
+
+        dlg.icss_tab.stack_axis_combo.setCurrentIndex(new_stack)
+        dlg.map_tab.refresh(force=True)
+
+        assert dlg.map_tab._slice1d_slider.maximum() == 2
+        assert dlg.map_tab._slice1d_spin.maximum() == 2
+        assert dlg.map_tab._slice1d_slider.value() <= 2
+
     def test_send_to_scan_routes_data(self, make_dialog, plane_out):
         """Clicking the '→ 1D Scan tab' button injects data into scan_tab."""
         dlg = make_dialog(plane_out)

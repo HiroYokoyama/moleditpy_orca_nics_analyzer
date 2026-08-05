@@ -226,17 +226,23 @@ class Map2DTab(QWidget):
             info = self.field.plane_data(self._component())
         except ValueError:
             return
+        self._set_slice1d_bounds(info, recentre=True)
+
+    def _set_slice1d_bounds(self, info, recentre=False):
+        """Clamp the 2D→1D index controls to the in-plane extent of *info*.
+
+        The in-plane axes swap when the cut axis changes, so the bounds have to
+        follow the plane that is actually on screen.
+        """
         fixed_axis = self._slice1d_axis.currentData()
         n = len(info["a1"]) if fixed_axis == 0 else len(info["a2"])
-        self._slice1d_slider.blockSignals(True)
-        self._slice1d_slider.setMaximum(max(0, n - 1))
-        self._slice1d_slider.setValue(max(0, n - 1) // 2)
-        self._slice1d_slider.blockSignals(False)
-
-        self._slice1d_spin.blockSignals(True)
-        self._slice1d_spin.setMaximum(max(0, n - 1))
-        self._slice1d_spin.setValue(self._slice1d_slider.value())
-        self._slice1d_spin.blockSignals(False)
+        top = max(0, n - 1)
+        value = top // 2 if recentre else min(self._slice1d_slider.value(), top)
+        for widget in (self._slice1d_slider, self._slice1d_spin):
+            widget.blockSignals(True)
+            widget.setMaximum(top)
+            widget.setValue(value)
+            widget.blockSignals(False)
 
     def _on_auto_toggled(self, checked):
         self.vmax.setEnabled(not checked)
@@ -299,6 +305,7 @@ class Map2DTab(QWidget):
 
         info = self.field.plane_slice(component, slice_idx)
         values = info["values"]
+        self._set_slice1d_bounds(info)
 
         finite = values[np.isfinite(values)]
         if self.auto_range.isChecked():
