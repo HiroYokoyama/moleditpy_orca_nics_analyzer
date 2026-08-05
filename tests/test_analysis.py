@@ -12,6 +12,7 @@ import pytest
 np = pytest.importorskip("numpy")
 
 from orca_nics_analyzer import cube_io  # noqa: E402
+from orca_nics_analyzer import nics_math as nm  # noqa: E402
 from orca_nics_analyzer.analysis import export_all, load_field  # noqa: E402
 from make_fixtures import ISO_K, RING_K, shielding_tensor  # noqa: E402
 
@@ -95,6 +96,30 @@ class TestAxisModes:
         field = load_field(single_out)
         with pytest.raises(ValueError, match="component"):
             field.values("anisotropy")
+
+    def test_changing_the_stack_axis_reprojects_zz(self, volume_out):
+        """In grid mode the cut axis *is* the NICS_zz axis."""
+        field = load_field(volume_out)
+        before = field.values("zz").copy()
+        field.set_stack_axis(1)
+        after = field.values("zz")
+        expected = [nm.nics_zz(p["entry"], field.axis_for(p)) for p in field.probes]
+        assert not np.allclose(before, after)
+        assert np.allclose(after, expected)
+
+    def test_stack_axis_reprojection_survives_an_explicit_axis_mode(self, volume_out):
+        """A lab-axis projection must not move when the cut axis changes."""
+        field = load_field(volume_out, axis_mode="z")
+        before = field.values("zz").copy()
+        field.set_stack_axis(1)
+        assert np.allclose(field.values("zz"), before)
+
+    def test_repeated_stack_axis_set_is_a_no_op(self, volume_out):
+        field = load_field(volume_out)
+        field.set_stack_axis(2)
+        once = field.values("zz").copy()
+        field.set_stack_axis(2)
+        assert np.allclose(field.values("zz"), once)
 
     def test_ring_mode_uses_the_ring_normal(self, single_out):
         field = load_field(single_out, axis_mode="ring")

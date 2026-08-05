@@ -104,8 +104,14 @@ class NicsField:
 
     def set_stack_axis(self, axis_index):
         """Override the axis used for slicing a 3D volume into 2D maps."""
-        if axis_index in (0, 1, 2, None):
-            self._override_stack_axis = axis_index
+        if axis_index not in (0, 1, 2, None):
+            return
+        if axis_index == self._override_stack_axis:
+            return
+        self._override_stack_axis = axis_index
+        # In "grid" mode the stack axis *is* the NICS_zz direction, so every
+        # projection has to be redone against the new normal.
+        self.set_axis_mode(self.axis_mode, self.custom_axis)
 
     @property
     def mean_ring_normal(self):
