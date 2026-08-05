@@ -1865,3 +1865,85 @@ class TestHeaderAndVectorSettings:
             assert not dlg._vector_chk.isEnabled()
         finally:
             dlg.close()
+
+
+# ---------------------------------------------------------------------------
+# Plane resampling helper
+# ---------------------------------------------------------------------------
+
+
+class TestResamplePlane:
+    def _grid(self, a1, a2):
+        return np.outer(np.sin(a1), np.cos(a2))
+
+    def test_probe_values_are_reproduced_exactly(self):
+        from orca_nics_analyzer.icss3d_tab import _resample_plane
+
+        a1 = np.linspace(-3.0, 3.0, 5)
+        a2 = np.linspace(-2.0, 2.0, 4)
+        v = self._grid(a1, a2)
+        out, fa1, fa2 = _resample_plane(v, a1, a2)
+        for i, x in enumerate(a1):
+            for j, y in enumerate(a2):
+                m = int(np.argmin(np.abs(fa1 - x)))
+                n = int(np.argmin(np.abs(fa2 - y)))
+                assert fa1[m] == pytest.approx(x)
+                assert fa2[n] == pytest.approx(y)
+                assert out[m, n] == pytest.approx(v[i, j])
+
+    def test_uneven_probe_spacing_still_lands_on_nodes(self):
+        """np.linspace over the whole range would miss unevenly spaced probes."""
+        from orca_nics_analyzer.icss3d_tab import _resample_plane
+
+        a1 = np.array([0.0, 0.5, 2.5, 3.0])
+        a2 = np.array([0.0, 1.0, 4.0])
+        v = self._grid(a1, a2)
+        out, fa1, fa2 = _resample_plane(v, a1, a2)
+        for i, x in enumerate(a1):
+            for j, y in enumerate(a2):
+                m = int(np.argmin(np.abs(fa1 - x)))
+                n = int(np.argmin(np.abs(fa2 - y)))
+                assert fa1[m] == pytest.approx(x)
+                assert fa2[n] == pytest.approx(y)
+                assert out[m, n] == pytest.approx(v[i, j])
+
+    def test_midpoints_are_the_bilinear_value(self):
+        from orca_nics_analyzer.icss3d_tab import _resample_plane
+
+        a1 = np.array([0.0, 2.0])
+        a2 = np.array([0.0, 2.0])
+        v = np.array([[0.0, 10.0], [20.0, 30.0]])
+        out, fa1, fa2 = _resample_plane(v, a1, a2)
+        m = int(np.argmin(np.abs(fa1 - 1.0)))
+        n = int(np.argmin(np.abs(fa2 - 1.0)))
+        assert out[m, n] == pytest.approx(15.0)
+
+    def test_extent_and_ordering_are_unchanged(self):
+        from orca_nics_analyzer.icss3d_tab import _resample_plane
+
+        a1 = np.linspace(-3.0, 3.0, 5)
+        a2 = np.linspace(-2.0, 2.0, 5)
+        out, fa1, fa2 = _resample_plane(self._grid(a1, a2), a1, a2)
+        assert (fa1[0], fa1[-1]) == pytest.approx((a1[0], a1[-1]))
+        assert (fa2[0], fa2[-1]) == pytest.approx((a2[0], a2[-1]))
+        assert np.all(np.diff(fa1) > 0) and np.all(np.diff(fa2) > 0)
+        assert out.shape == (len(fa1), len(fa2))
+
+    def test_a_single_row_is_left_alone(self):
+        from orca_nics_analyzer.icss3d_tab import _resample_plane
+
+        a1 = np.array([0.0, 1.0])
+        a2 = np.array([0.0])
+        v = np.zeros((2, 1))
+        out, fa1, fa2 = _resample_plane(v, a1, a2)
+        assert out is v
+        assert len(fa1) == 2 and len(fa2) == 1
+
+    def test_an_already_dense_grid_is_not_subdivided(self):
+        from orca_nics_analyzer.icss3d_tab import _resample_plane
+
+        a1 = np.linspace(0.0, 1.0, 80)
+        a2 = np.linspace(0.0, 1.0, 80)
+        out, fa1, fa2 = _resample_plane(self._grid(a1, a2), a1, a2)
+        assert len(fa1) == 80 and len(fa2) == 80
+        assert out.shape == (80, 80)
