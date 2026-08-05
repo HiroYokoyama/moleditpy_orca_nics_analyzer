@@ -280,6 +280,9 @@ class NicsAnalyzerDialog(QDialog):
 
         self.map_tab.vmax.valueChanged.connect(self._set_3d_display_range)
         self.map_tab.auto_range.toggled.connect(self._set_3d_auto_display_range)
+        # An auto-computed range is written into vmax with signals blocked, so
+        # this is the only way the 3D plane learns the scale the 2D map used.
+        self.map_tab._on_range_computed = self.icss_tab.set_display_range
 
         self.map_tab.component.currentIndexChanged.connect(self._sync_component_to_3d)
         self.map_tab.cmap.currentTextChanged.connect(self._refresh_3d_from_map)

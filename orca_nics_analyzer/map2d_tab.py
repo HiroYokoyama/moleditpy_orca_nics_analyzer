@@ -62,6 +62,9 @@ class Map2DTab(QWidget):
         self._show_slice_in_1d = show_slice_in_1d
         self._clear_3d = clear_3d
         self._is_tab_visible = lambda: True
+        #: Set by the parent dialog to mirror the effective +/- ppm range onto
+        #: the 3D plane, which cannot see the auto-computed value otherwise.
+        self._on_range_computed = None
         self.canvas = None
         self.figure = None
         self._build_ui()
@@ -120,6 +123,7 @@ class Map2DTab(QWidget):
         self.vmax.setRange(0.1, 1000.0)
         self.vmax.setDecimals(2)
         self.vmax.setSingleStep(1.0)
+        self.vmax.setValue(10.0)  # replaced by the auto span on the first draw
         self.vmax.valueChanged.connect(self._on_control_changed)
         grid.addWidget(self.vmax, 1, 1)
 
@@ -311,11 +315,15 @@ class Map2DTab(QWidget):
         if self.auto_range.isChecked():
             span = float(np.max(np.abs(finite))) if finite.size else 1.0
             span = span if span > 0 else 1.0
+            # Blocked: valueChanged would re-enter refresh() through the
+            # control wrapper. The 3D side is told separately, below.
             self.vmax.blockSignals(True)
             self.vmax.setValue(span)
             self.vmax.blockSignals(False)
         else:
             span = self.vmax.value()
+        if self._on_range_computed is not None:
+            self._on_range_computed(span)
 
         a1_offset = 0.0
         a2_offset = 0.0

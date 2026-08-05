@@ -1096,6 +1096,30 @@ class TestTabSync:
         assert second.icss_tab.opacity.value() == pytest.approx(0.8)
         assert not second.icss_tab.show_negative.isChecked()
 
+    def test_auto_range_reaches_the_3d_plane(self, make_dialog, volume_out):
+        """The 2D map and the 3D plane must colour the same slice alike.
+
+        The auto span is written into vmax with signals blocked, so without an
+        explicit hand-off the 3D side keeps its 10.0 ppm default and unticking
+        Auto rescales the plane out from under the map.
+        """
+        dlg = make_dialog(volume_out)
+        dlg.tabs.setCurrentWidget(dlg.map_tab)
+        dlg.map_tab.refresh(force=True)
+
+        info = dlg.field.plane_slice(
+            dlg.map_tab._component(), dlg.map_tab._get_slice_index()
+        )
+        finite = info["values"][np.isfinite(info["values"])]
+        data_span = float(np.max(np.abs(finite)))
+        assert data_span > 20.0  # far from the 10.0 default, so a stale value shows
+
+        assert dlg.icss_tab._display_span == pytest.approx(data_span, abs=0.01)
+        dlg.map_tab.auto_range.setChecked(False)
+        assert dlg.icss_tab._display_span == pytest.approx(
+            dlg.map_tab.vmax.value(), abs=1e-9
+        )
+
     def test_map_range_updates_3d_compatibility_state(self, make_dialog, volume_out):
         dlg = make_dialog(volume_out)
 
