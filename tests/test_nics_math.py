@@ -236,3 +236,85 @@ class TestMinSpacing:
 
     def test_all_identical(self):
         assert nm._min_spacing(np.array([2.0, 2.0])) == 0.0
+
+
+class TestEntryEdgeCases:
+    """The parser can hand these functions partial or missing entries."""
+
+    def test_a_missing_entry_has_no_value(self):
+        assert nm.nics_iso(None) is None
+        assert nm.nics_zz(None, (0, 0, 1)) is None
+        assert nm.principal_components(None) is None
+        assert nm.anisotropy(None) is None
+
+    def test_iso_falls_back_to_the_tensor_trace(self):
+        """ORCA prints the summary and the tensors in separate blocks."""
+        entry = {"iso": None, "tensor": [[3.0, 0, 0], [0, 6.0, 0], [0, 0, 9.0]]}
+        assert nm.nics_iso(entry) == pytest.approx(-6.0)
+
+    def test_iso_is_none_without_either(self):
+        assert nm.nics_iso({"iso": None, "tensor": None}) is None
+
+    def test_principal_components_need_a_tensor(self):
+        assert nm.principal_components({"tensor": None}) is None
+
+    def test_anisotropy_falls_back_to_the_printed_value(self):
+        assert nm.anisotropy({"tensor": None, "aniso": 42.0}) == pytest.approx(42.0)
+
+    def test_zz_needs_a_usable_axis(self):
+        entry = {"tensor": [[1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]]}
+        assert nm.nics_zz(entry, None) is None
+        assert nm.nics_zz(entry, (0.0, 0.0, 0.0)) is None
+
+    def test_zz_normalises_the_axis(self):
+        entry = {"tensor": [[0.0, 0, 0], [0, 0.0, 0], [0, 0, 8.0]]}
+        assert nm.nics_zz(entry, (0, 0, 5.0)) == pytest.approx(-8.0)
+
+
+class TestRingNormalSign:
+    def _ring(self):
+        import numpy as np
+
+        angles = np.linspace(0, 2 * np.pi, 6, endpoint=False)
+        return np.stack([np.cos(angles), np.sin(angles), np.zeros(6)], axis=1)
+
+    def test_a_reference_picks_the_face(self):
+        import numpy as np
+
+        pos = self._ring()
+        up = nm.ring_normal(pos, reference=(0, 0, 1))
+        down = nm.ring_normal(pos, reference=(0, 0, -1))
+        assert up @ np.array([0, 0, 1.0]) > 0
+        assert down @ np.array([0, 0, 1.0]) < 0
+
+    def test_the_unreferenced_sign_is_deterministic(self):
+        pos = self._ring()
+        assert np.allclose(nm.ring_normal(pos), nm.ring_normal(pos[::-1]))
+
+    def test_the_normal_is_a_unit_vector(self):
+        import numpy as np
+
+        assert np.linalg.norm(nm.ring_normal(self._ring())) == pytest.approx(1.0)
+
+
+class TestLayoutFallbacks:
+    def test_two_coincident_probes_do_not_break_layout_detection(self):
+        layout = nm.detect_layout([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+        assert layout["kind"] in ("single", "scattered")
+
+    def test_a_single_probe_is_reported_as_such(self):
+        layout = nm.detect_layout([[1.0, 2.0, 3.0]])
+        assert layout["kind"] == "single"
+        assert layout["shape"] == (1,)
+
+    def test_no_probes_at_all(self):
+        assert nm.detect_layout([])["kind"] == "none"
+
+    def test_plane_axes_put_the_flat_axis_last(self):
+        import numpy as np
+
+        pts = [[x, y, 0.0] for x in range(3) for y in range(3)]
+        layout = nm.detect_layout(pts)
+        _, _, normal, order = nm.plane_axes(layout)
+        assert layout["shape"][order[2]] == 1
+        assert abs(np.dot(normal, [0, 0, 1.0])) == pytest.approx(1.0)
