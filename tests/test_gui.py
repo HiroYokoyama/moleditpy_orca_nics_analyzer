@@ -1669,4 +1669,3 @@ class TestHeaderAndVectorSettings:
             assert not dlg._vector_chk.isEnabled()
         finally:
             dlg.close()
-
