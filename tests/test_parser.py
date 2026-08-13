@@ -37,6 +37,48 @@ class TestRealOutput:
             assert trace == pytest.approx(entry["iso"], abs=0.01)
 
 
+class TestRealVolumeOutput:
+    """A genuine ORCA 6.1.1 output combining a real molecule with a 9x9x7 ghost grid."""
+
+    def test_geometry_and_ghosts(self, real_grid_out):
+        data = NicsParser().load(real_grid_out)
+        assert data["orca_version"] == "6.1.1"
+        assert len(data["atoms"]) == 579
+        assert len(data["ghost_indices"]) == 567
+        assert [a["symbol"] for a in data["atoms"]].count("C") == 6
+        assert len(data["shieldings"]) == 579
+        assert data["has_tensors"] is True
+
+    def test_first_and_last_nucleus_values(self, real_grid_out):
+        data = NicsParser().load(real_grid_out)
+        assert data["shieldings"][0]["iso"] == pytest.approx(115.213)
+        assert data["shieldings"][0]["aniso"] == pytest.approx(134.391)
+        assert data["shieldings"][578]["iso"] == pytest.approx(-0.041)
+        assert data["shieldings"][578]["aniso"] == pytest.approx(0.365)
+
+    def test_tensor_belongs_to_its_own_nucleus(self, real_grid_out):
+        data = NicsParser().load(real_grid_out)
+        tensor = data["shieldings"][0]["tensor"]
+        assert tensor[0][0] == pytest.approx(83.229)
+        assert tensor[2][2] == pytest.approx(204.760)
+        tensor = data["shieldings"][578]["tensor"]
+        assert tensor[0][0] == pytest.approx(0.033)
+        assert tensor[2][2] == pytest.approx(-0.182)
+
+    def test_trace_matches_the_summary(self, real_grid_out):
+        data = NicsParser().load(real_grid_out)
+        for entry in data["shieldings"].values():
+            trace = sum(entry["tensor"][i][i] for i in range(3)) / 3.0
+            assert trace == pytest.approx(entry["iso"], abs=0.01)
+
+    def test_probes_and_real_atoms(self, real_grid_out):
+        parser = NicsParser()
+        parser.load(real_grid_out)
+        assert len(parser.real_atoms) == 12
+        assert all(not a["is_ghost"] for a in parser.real_atoms)
+        assert len(parser.probes) == 567
+
+
 class TestGhostDetection:
     def test_ghosts_found_by_zero_nuclear_charge(self, single_out):
         data = NicsParser().load(single_out)

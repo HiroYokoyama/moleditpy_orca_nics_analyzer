@@ -156,6 +156,15 @@ class TestGrids:
         assert field.layout["kind"] == "volume"
         assert field.grid("zz")[0].shape == (5, 5, 5)
 
+    def test_real_non_cubic_volume_is_gridded(self, real_grid_out):
+        """A genuine ORCA output whose grid is 9x9x7, not a symmetric cube."""
+        field = load_field(real_grid_out)
+        assert field.layout["kind"] == "volume"
+        assert field.layout["regular"] is True
+        cube, origin, steps = field.grid("zz")
+        assert cube.shape == (9, 9, 7)
+        assert not np.any(np.isnan(cube))
+
     def test_grid_values_land_on_the_right_nodes(self, plane_out):
         """Every grid cell must hold the value of the probe at that position."""
         field = load_field(plane_out)

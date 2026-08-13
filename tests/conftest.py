@@ -44,6 +44,12 @@ def real_out():
     return sample("real_benzene_nmr_orca5.out")
 
 
+@pytest.fixture
+def real_grid_out():
+    """A genuine ORCA 6.1.1 benzene NMR output with a 9x9x7 ghost probe grid."""
+    return sample("benzene-opt-nmr.out")
+
+
 @pytest.fixture(autouse=True)
 def isolated_settings(tmp_path, monkeypatch):
     """Keep the user's real preferences file out of the test run.
