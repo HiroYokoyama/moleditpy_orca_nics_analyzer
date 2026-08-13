@@ -41,7 +41,7 @@ everything else keeps working.
 
 ## Use
 
-**Analysis → ORCA NICS Analyzer...**, then pick the ORCA `.out`. The window opens
+**Extensions → ORCA NICS Analyzer...**, then pick the ORCA `.out`. The window opens
 on the tab that matches how the probes were arranged.
 
 ### Preparing the ORCA job
