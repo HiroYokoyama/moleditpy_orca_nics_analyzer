@@ -21,11 +21,9 @@ means), run the ORCA NMR job, then open the `.out` here.
 | A plane of probes | **2D Map**: filled NICS contours with the molecule projected on top |
 | A 3D box of probes | **3D ICSS**: ± isosurfaces drawn in MoleditPy's own 3D viewer |
 
-<p align="center">
-  <img src="img/1d.png" width="32%" alt="1D Scan">
-  <img src="img/2d.png" width="32%" alt="2D Map">
-  <img src="img/3d.png" width="32%" alt="3D ICSS">
-</p>
+![1D Scan](img/1d.png)
+![2D Map](img/2d.png)
+![3D ICSS](img/3d.png)
 
 Everything is exportable: probe CSV, scan CSV, map grid CSV, plot images
 (PNG/PDF/SVG), Gaussian `.cube` files and a text summary — individually per tab,
