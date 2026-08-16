@@ -6,6 +6,8 @@
 [![GitHub tag](https://img.shields.io/github/v/tag/HiroYokoyama/moleditpy_orca_nics_analyzer?label=version)](https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/tags)
 [![GitHub Downloads](https://img.shields.io/github/downloads/HiroYokoyama/moleditpy_orca_nics_analyzer/total)](https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/releases)
 
+Repo: [https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/](https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/)
+
 A [MoleditPy](https://github.com/HiroYokoyama/python_molecular_editor) plugin that
 reads NICS data out of an ORCA output file and turns it into numbers, maps and
 isosurfaces.
