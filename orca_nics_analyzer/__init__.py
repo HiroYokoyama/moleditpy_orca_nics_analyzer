@@ -89,7 +89,7 @@ def _open_file(path, context):
             mw,
             "No NICS probes found",
             "This output has no ghost atoms with NMR shielding data.\n\n"
-            "NICS requires ghost centres (e.g. 'H:' or 'Bq') in the geometry "
+            "NICS requires ghost centres (e.g. 'H:') in the geometry "
             "and an NMR job that includes them.",
         )
         return
