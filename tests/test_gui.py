@@ -603,12 +603,12 @@ class TestMapTab:
     def test_map_axes_are_centered_and_fitted_to_data(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
         ax = dialog.map_tab.figure.axes[0]
-        assert ax.get_aspect() == 1.0
-        assert ax.get_adjustable() == "box"
-        assert ax.get_anchor() == "C"
+        cax = dialog.map_tab.figure.axes[1]
         info = dialog.field.plane_slice("zz", 0)
         assert ax.get_xlim() == (float(info["a1"][0]), float(info["a1"][-1]))
         assert ax.get_ylim() == (float(info["a2"][0]), float(info["a2"][-1]))
+        assert cax.get_position().x0 > ax.get_position().x1
+        assert (cax.get_position().x0 - ax.get_position().x1) < 0.15
 
     def test_auto_range_fills_the_spin_box(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
@@ -1987,33 +1987,38 @@ class TestMap2DImprovements:
         dialog = make_dialog(volume_out)
         info = dialog.field.plane_slice("zz", 0)
         ax = dialog.map_tab.figure.axes[0]
+        cax = dialog.map_tab.figure.axes[1]
         assert ax.get_xlim() == (float(info["a1"][0]), float(info["a1"][-1]))
         assert ax.get_ylim() == (float(info["a2"][0]), float(info["a2"][-1]))
-        assert ax.get_adjustable() == "box"
-        assert ax.get_anchor() == "C"
+        assert cax.get_position().x0 > ax.get_position().x1
 
     def test_graph_stays_centered_on_small_and_wide_resizes(
         self, make_dialog, plane_out
     ):
         dialog = make_dialog(plane_out)
         fig = dialog.map_tab.figure
-        ax = fig.axes[0]
 
         # Test small / ensmalled size
         fig.set_size_inches(2.5, 2.5)
-        fig.draw_without_rendering()
+        dialog.map_tab.refresh(force=True)
+        ax = fig.axes[0]
+        cax = fig.axes[1]
         pos_small = ax.get_position()
+        cax_small = cax.get_position()
         assert pos_small.x0 > 0 and pos_small.y0 > 0
-        assert ax.get_adjustable() == "box"
-        assert ax.get_anchor() == "C"
+        assert cax_small.x0 > pos_small.x1
 
         # Test wide size
         fig.set_size_inches(10.0, 3.0)
-        fig.draw_without_rendering()
+        dialog.map_tab.refresh(force=True)
+        ax = fig.axes[0]
+        cax = fig.axes[1]
         pos_wide = ax.get_position()
+        cax_wide = cax.get_position()
         assert pos_wide.x0 > 0 and pos_wide.y0 > 0
-        assert ax.get_adjustable() == "box"
-        assert ax.get_anchor() == "C"
+        assert cax_wide.x0 > pos_wide.x1
+        # Colorbar remains close to graph (not pushed far away to right window border)
+        assert (cax_wide.x0 - pos_wide.x1) < 0.10
         info = dialog.field.plane_slice("zz", 0)
         assert ax.get_xlim() == (float(info["a1"][0]), float(info["a1"][-1]))
         assert ax.get_ylim() == (float(info["a2"][0]), float(info["a2"][-1]))
@@ -2035,7 +2040,7 @@ class TestMap2DImprovements:
         assert ax.get_xlim() == (-2.5, 3.5)
         assert ax.get_ylim() == (1.0, 6.0)
 
-    def test_plugin_version_is_0_5_0(self):
+    def test_plugin_version_is_0_5_2(self):
         import orca_nics_analyzer
 
-        assert orca_nics_analyzer.PLUGIN_VERSION == "0.5.1"
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.5.2"

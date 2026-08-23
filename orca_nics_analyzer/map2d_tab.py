@@ -152,8 +152,16 @@ class Map2DTab(QWidget):
             )
             return
 
-        self.figure = Figure(figsize=(6, 5), layout="constrained")
+        self.figure = Figure(figsize=(6, 5))
         self.canvas = FigureCanvas(self.figure)
+        orig_resize = self.canvas.resizeEvent
+
+        def on_resize(event):
+            orig_resize(event)
+            if self._is_tab_visible():
+                self.refresh()
+
+        self.canvas.resizeEvent = on_resize
         layout.addWidget(NavigationToolbar(self.canvas, self))
         layout.addWidget(self.canvas, 1)
 
@@ -407,10 +415,55 @@ class Map2DTab(QWidget):
         a1_offset = 0.0
         a2_offset = 0.0
 
+        w, h = self.figure.get_size_inches()
+        w, h = max(1.0, float(w)), max(1.0, float(h))
+
         plot_a1 = info["a1"]
         plot_a2 = info["a2"]
 
-        ax = self.figure.add_subplot(111)
+        span_a1 = (
+            abs(float(plot_a1[-1] - plot_a1[0]))
+            if len(plot_a1) > 1 and plot_a1[-1] != plot_a1[0]
+            else 1.0
+        )
+        span_a2 = (
+            abs(float(plot_a2[-1] - plot_a2[0]))
+            if len(plot_a2) > 1 and plot_a2[-1] != plot_a2[0]
+            else 1.0
+        )
+        data_ratio = max(0.01, span_a2 / span_a1)
+
+        top_m_in = min(0.4, 0.12 * h)
+        bot_m_in = min(0.55, 0.16 * h)
+        h_avail_in = max(0.5, h - top_m_in - bot_m_in)
+
+        left_m_in = min(0.55, 0.15 * w)
+        right_m_in = min(0.65, 0.18 * w)
+        w_avail_in = max(0.5, w - left_m_in - right_m_in)
+
+        cb_w_in = min(0.18, 0.05 * w_avail_in)
+        gap_in = min(0.35, 0.12 * w_avail_in)
+
+        ax_w_in = min(w_avail_in - (cb_w_in + gap_in), h_avail_in / data_ratio)
+        ax_w_in = max(0.2, ax_w_in)
+        ax_h_in = max(0.2, data_ratio * ax_w_in)
+
+        total_w_in = ax_w_in + gap_in + cb_w_in
+
+        x_start_in = left_m_in + (w_avail_in - total_w_in) / 2.0
+        y_start_in = bot_m_in + (h_avail_in - ax_h_in) / 2.0
+
+        ax_rect = [x_start_in / w, y_start_in / h, ax_w_in / w, ax_h_in / h]
+        cb_rect = [
+            (x_start_in + ax_w_in + gap_in) / w,
+            y_start_in / h,
+            cb_w_in / w,
+            ax_h_in / h,
+        ]
+
+        ax = self.figure.add_axes(ax_rect)
+        cax = self.figure.add_axes(cb_rect)
+
         levels = np.linspace(-span, span, self.levels.value())
         # values is indexed [a1, a2]; contourf wants [row=y, col=x].
         mesh = ax.contourf(
@@ -444,7 +497,7 @@ class Map2DTab(QWidget):
         self._draw_slice1d_crosshair(ax, info, a1_offset, a2_offset)
 
         label = "NICS$_{zz}$" if component == "zz" else "NICS(iso)"
-        bar = self.figure.colorbar(mesh, ax=ax, pad=0.02)
+        bar = self.figure.colorbar(mesh, cax=cax, orientation="vertical")
         bar.set_label(f"{label} / ppm")
         ax.set_xlabel("in-plane axis 1 / Å")
         ax.set_ylabel("in-plane axis 2 / Å")
@@ -457,10 +510,6 @@ class Map2DTab(QWidget):
             ax.set_ylim(float(plot_a2[0]), float(plot_a2[-1]))
         elif len(plot_a2) >= 1:
             ax.set_ylim(float(plot_a2[0]) - 0.5, float(plot_a2[0]) + 0.5)
-
-        # Keep the map centered with 1:1 data aspect ratio and box fitted to the data bounds.
-        ax.set_aspect("equal", adjustable="box")
-        ax.set_anchor("C")
 
         position_label = self._slice_position_label(info)
         title = f"{label} map"
