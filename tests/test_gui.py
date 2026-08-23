@@ -600,14 +600,15 @@ class TestMapTab:
         map_vmax = map_layout.getItemPosition(map_layout.indexOf(dialog.map_tab.vmax))
         assert map_auto[:2] != map_vmax[:2]
 
-    def test_map_axes_are_centered_with_a_data_limit_aspect(
-        self, make_dialog, plane_out
-    ):
+    def test_map_axes_are_centered_and_fitted_to_data(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
         ax = dialog.map_tab.figure.axes[0]
         assert ax.get_aspect() == 1.0
-        assert ax.get_adjustable() == "datalim"
+        assert ax.get_adjustable() == "box"
         assert ax.get_anchor() == "C"
+        info = dialog.field.plane_slice("zz", 0)
+        assert ax.get_xlim() == (float(info["a1"][0]), float(info["a1"][-1]))
+        assert ax.get_ylim() == (float(info["a2"][0]), float(info["a2"][-1]))
 
     def test_auto_range_fills_the_spin_box(self, make_dialog, plane_out):
         dialog = make_dialog(plane_out)
@@ -1122,6 +1123,12 @@ class TestTabSync:
         # Change on icss tab
         dlg.icss_tab.cmap.setCurrentText("coolwarm")
         assert dlg.map_tab.cmap.currentText() == "coolwarm"
+
+        # Rainbow colormap sync
+        dlg.map_tab.cmap.setCurrentText("rainbow")
+        assert dlg.icss_tab.cmap.currentText() == "rainbow"
+        dlg.icss_tab.cmap.setCurrentText("turbo")
+        assert dlg.map_tab.cmap.currentText() == "turbo"
 
     def test_dialog_settings_round_trip(self, make_dialog, volume_out):
         first = make_dialog(volume_out)
@@ -1947,3 +1954,88 @@ class TestResamplePlane:
         out, fa1, fa2 = _resample_plane(self._grid(a1, a2), a1, a2)
         assert len(fa1) == 80 and len(fa2) == 80
         assert out.shape == (80, 80)
+
+
+class TestMap2DImprovements:
+    def test_colormaps_contain_rainbow_and_full_palette(self):
+        from orca_nics_analyzer.map2d_tab import COLORMAPS
+
+        # Check rainbow and popular scientific colormaps are included
+        for cmap in (
+            "rainbow",
+            "rainbow_r",
+            "jet",
+            "turbo",
+            "viridis",
+            "plasma",
+            "seismic",
+            "RdBu_r",
+            "coolwarm",
+        ):
+            assert cmap in COLORMAPS
+        assert len(COLORMAPS) > 10
+
+    def test_map_tab_colormap_switch_and_redraw(self, make_dialog, plane_out):
+        dialog = make_dialog(plane_out)
+        for cmap_name in ("rainbow", "jet", "turbo", "viridis", "seismic"):
+            dialog.map_tab.cmap.setCurrentText(cmap_name)
+            dialog.map_tab.refresh(force=True)
+            assert dialog.map_tab.cmap.currentText() == cmap_name
+            assert dialog.icss_tab.cmap.currentText() == cmap_name
+
+    def test_axis_fitted_with_data_bounds(self, make_dialog, volume_out):
+        dialog = make_dialog(volume_out)
+        info = dialog.field.plane_slice("zz", 0)
+        ax = dialog.map_tab.figure.axes[0]
+        assert ax.get_xlim() == (float(info["a1"][0]), float(info["a1"][-1]))
+        assert ax.get_ylim() == (float(info["a2"][0]), float(info["a2"][-1]))
+        assert ax.get_adjustable() == "box"
+        assert ax.get_anchor() == "C"
+
+    def test_graph_stays_centered_on_small_and_wide_resizes(
+        self, make_dialog, plane_out
+    ):
+        dialog = make_dialog(plane_out)
+        fig = dialog.map_tab.figure
+        ax = fig.axes[0]
+
+        # Test small / ensmalled size
+        fig.set_size_inches(2.5, 2.5)
+        fig.draw_without_rendering()
+        pos_small = ax.get_position()
+        assert pos_small.x0 > 0 and pos_small.y0 > 0
+        assert ax.get_adjustable() == "box"
+        assert ax.get_anchor() == "C"
+
+        # Test wide size
+        fig.set_size_inches(10.0, 3.0)
+        fig.draw_without_rendering()
+        pos_wide = ax.get_position()
+        assert pos_wide.x0 > 0 and pos_wide.y0 > 0
+        assert ax.get_adjustable() == "box"
+        assert ax.get_anchor() == "C"
+        info = dialog.field.plane_slice("zz", 0)
+        assert ax.get_xlim() == (float(info["a1"][0]), float(info["a1"][-1]))
+        assert ax.get_ylim() == (float(info["a2"][0]), float(info["a2"][-1]))
+
+    def test_custom_grid_bounds_fit_axes(self, make_dialog, plane_out, monkeypatch):
+        dialog = make_dialog(plane_out)
+        orig_slice = dialog.field.plane_slice
+
+        def mock_slice(component, idx):
+            res = orig_slice(component, idx).copy()
+            res["a1"] = np.array([-2.5, 3.5])
+            res["a2"] = np.array([1.0, 6.0])
+            res["values"] = np.array([[1.0, 2.0], [3.0, 4.0]])
+            return res
+
+        monkeypatch.setattr(dialog.field, "plane_slice", mock_slice)
+        dialog.map_tab.refresh(force=True)
+        ax = dialog.map_tab.figure.axes[0]
+        assert ax.get_xlim() == (-2.5, 3.5)
+        assert ax.get_ylim() == (1.0, 6.0)
+
+    def test_plugin_version_is_0_5_0(self):
+        import orca_nics_analyzer
+
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.5.0"

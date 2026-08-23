@@ -41,9 +41,76 @@ except ImportError:  # matplotlib is an optional dependency
 
 from . import nics_math as nm
 
-#: Diverging colormaps only — a NICS map is signed and must read symmetrically
-#: about zero.
-COLORMAPS = ("seismic", "RdBu_r", "coolwarm", "bwr", "PuOr_r")
+
+def _get_available_colormaps():
+    primary = [
+        "seismic",
+        "RdBu_r",
+        "coolwarm",
+        "bwr",
+        "PuOr_r",
+        "rainbow",
+        "rainbow_r",
+        "jet",
+        "jet_r",
+        "turbo",
+        "turbo_r",
+        "viridis",
+        "viridis_r",
+        "plasma",
+        "plasma_r",
+        "inferno",
+        "inferno_r",
+        "magma",
+        "magma_r",
+        "cividis",
+        "cividis_r",
+        "Spectral",
+        "Spectral_r",
+        "gist_rainbow",
+        "gist_rainbow_r",
+    ]
+    try:
+        from matplotlib import colormaps as mpl_colormaps
+
+        all_cmaps = sorted(list(mpl_colormaps))
+    except Exception:
+        try:
+            import matplotlib.pyplot as plt
+
+            all_cmaps = sorted(list(plt.colormaps()))
+        except Exception:
+            all_cmaps = []
+
+    seen = set()
+    result = []
+    for c in primary:
+        if (not all_cmaps or c in all_cmaps) and c not in seen:
+            seen.add(c)
+            result.append(c)
+    for c in all_cmaps:
+        if c not in seen:
+            seen.add(c)
+            result.append(c)
+    return (
+        tuple(result)
+        if result
+        else (
+            "seismic",
+            "RdBu_r",
+            "coolwarm",
+            "bwr",
+            "PuOr_r",
+            "rainbow",
+            "jet",
+            "turbo",
+            "viridis",
+            "plasma",
+        )
+    )
+
+
+COLORMAPS = _get_available_colormaps()
 
 
 class Map2DTab(QWidget):
@@ -381,8 +448,18 @@ class Map2DTab(QWidget):
         bar.set_label(f"{label} / ppm")
         ax.set_xlabel("in-plane axis 1 / Å")
         ax.set_ylabel("in-plane axis 2 / Å")
-        # Keep the map centered in the available axes beside the colorbar.
-        ax.set_aspect("equal", adjustable="datalim")
+        if len(plot_a1) > 1 and plot_a1[0] != plot_a1[-1]:
+            ax.set_xlim(float(plot_a1[0]), float(plot_a1[-1]))
+        elif len(plot_a1) >= 1:
+            ax.set_xlim(float(plot_a1[0]) - 0.5, float(plot_a1[0]) + 0.5)
+
+        if len(plot_a2) > 1 and plot_a2[0] != plot_a2[-1]:
+            ax.set_ylim(float(plot_a2[0]), float(plot_a2[-1]))
+        elif len(plot_a2) >= 1:
+            ax.set_ylim(float(plot_a2[0]) - 0.5, float(plot_a2[0]) + 0.5)
+
+        # Keep the map centered with 1:1 data aspect ratio and box fitted to the data bounds.
+        ax.set_aspect("equal", adjustable="box")
         ax.set_anchor("C")
 
         position_label = self._slice_position_label(info)
