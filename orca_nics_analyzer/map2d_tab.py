@@ -444,7 +444,7 @@ class Map2DTab(QWidget):
         self._draw_slice1d_crosshair(ax, info, a1_offset, a2_offset)
 
         label = "NICS$_{zz}$" if component == "zz" else "NICS(iso)"
-        bar = self.figure.colorbar(mesh, ax=ax)
+        bar = self.figure.colorbar(mesh, ax=ax, pad=0.02)
         bar.set_label(f"{label} / ppm")
         ax.set_xlabel("in-plane axis 1 / Å")
         ax.set_ylabel("in-plane axis 2 / Å")
