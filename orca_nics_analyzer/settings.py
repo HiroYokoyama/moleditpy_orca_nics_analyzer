@@ -20,7 +20,10 @@ auto-computed span must not overwrite the remembered preference.
 
 import json
 import logging
+import math
 import os
+
+logger = logging.getLogger(__name__)
 
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
 SETTINGS_KEY = "nics_analyzer_settings"
@@ -49,6 +52,23 @@ DEFAULT_SETTINGS = {
 }
 
 
+def _valid(value, default):
+    """True when *value* has the type of its default, so the dialog can use it.
+
+    A hand-edited or corrupted file would otherwise crash the dialog on open
+    (``int("abc")``) or tick a checkbox from a string.
+    """
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, (int, float)):
+        return (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        )
+    return isinstance(value, type(default))
+
+
 def load_settings(path=SETTINGS_FILE):
     """Load validated, molecule-independent preferences from *path*."""
     settings = dict(DEFAULT_SETTINGS)
@@ -59,10 +79,17 @@ def load_settings(path=SETTINGS_FILE):
         if isinstance(values, dict):
             for key in settings:
                 if key in values:
-                    settings[key] = values[key]
+                    if _valid(values[key], DEFAULT_SETTINGS[key]):
+                        settings[key] = values[key]
+                    else:
+                        logger.warning(
+                            "[orca_nics_analyzer] ignoring bad setting %s=%r",
+                            key,
+                            values[key],
+                        )
     except (OSError, TypeError, ValueError, AttributeError) as exc:
         if os.path.exists(path):
-            logging.warning("[orca_nics_analyzer] load settings: %s", exc)
+            logger.warning("[orca_nics_analyzer] load settings: %s", exc)
     return settings
 
 
@@ -90,6 +117,6 @@ def save_settings(settings, path=SETTINGS_FILE):
             os.remove(temporary)
         except OSError:
             pass
-        logging.warning("[orca_nics_analyzer] save settings: %s", exc)
+        logger.warning("[orca_nics_analyzer] save settings: %s", exc)
         return False
     return True

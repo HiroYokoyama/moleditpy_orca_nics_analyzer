@@ -6,7 +6,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-from orca_nics_analyzer import cube_io  # noqa: E402
+from orca_nics_analyzer import cube_io
 
 BOHR = cube_io.BOHR_PER_ANGSTROM
 

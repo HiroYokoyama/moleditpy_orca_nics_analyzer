@@ -11,8 +11,10 @@ try:
 except ImportError:  # CI installs pytest only
     np = None
 
-from . import nics_math as nm
 from . import cube_io
+from . import nics_math as nm
+
+logger = logging.getLogger(__name__)
 
 #: How the z of ``NICS_zz`` is chosen.
 AXIS_MODES = ("grid", "ring", "x", "y", "z")
@@ -89,7 +91,7 @@ class NicsField:
         layout = self.layout
         shape = layout.get("shape")
         if layout["kind"] == "plane":
-            return [a for a in range(3) if shape[a] <= 1][0]
+            return next(a for a in range(3) if shape[a] <= 1)
         if layout["kind"] == "volume":
             ref = self.mean_ring_normal
             if ref is not None:
@@ -186,11 +188,16 @@ class NicsField:
                 "iso": nm.nics_iso(entry),
             }
             probe["zz"] = nm.nics_zz(entry, self.axis_for(probe))
-            probe["classification"] = nm.classify(
-                probe["zz"] if probe["zz"] is not None else probe["iso"]
-            )
+            probe["classification"] = self._classify(probe)
             out.append(probe)
         return out
+
+    @staticmethod
+    def _classify(probe):
+        """Label from NICS_zz when a tensor was printed, else NICS(iso)."""
+        if probe["zz"] is not None:
+            return nm.classify(probe["zz"], "zz")
+        return nm.classify(probe["iso"], "iso")
 
     def set_axis_mode(self, mode, custom_axis=None):
         self._validate_axis(mode, custom_axis)
@@ -198,9 +205,7 @@ class NicsField:
         self.custom_axis = custom_axis
         for probe in self.probes:
             probe["zz"] = nm.nics_zz(probe["entry"], self.axis_for(probe))
-            probe["classification"] = nm.classify(
-                probe["zz"] if probe["zz"] is not None else probe["iso"]
-            )
+            probe["classification"] = self._classify(probe)
 
     def values(self, component):
         """Flat list of NICS values in probe order; missing entries are NaN."""
@@ -248,6 +253,29 @@ class NicsField:
                 steps.append(1.0 * axes[a])
         origin = layout["origin"] + sum(float(coords[a][0]) * axes[a] for a in range(3))
         return cube, origin, np.array(steps)
+
+    @property
+    def is_uniform(self):
+        """True when every grid axis has a constant step, as a cube requires."""
+        return bool(self.layout.get("uniform", True))
+
+    def grid_points(self):
+        """Exact probe positions on the grid, shape (n1, n2, n3, 3), Angstrom.
+
+        Built from the per-axis coordinates rather than one step per axis, so
+        an unevenly spaced grid is placed where its probes really are.
+        """
+        if not self.is_gridded:
+            raise ValueError("probe layout is not a regular grid")
+        coords = self.layout["coords"]
+        axes = self.layout["axes"]
+        i, j, k = np.meshgrid(coords[0], coords[1], coords[2], indexing="ij")
+        return (
+            self.layout["origin"]
+            + i[..., None] * axes[0]
+            + j[..., None] * axes[1]
+            + k[..., None] * axes[2]
+        )
 
     def plane_data(self, component):
         """(2D values, axis-1 coords, axis-2 coords, in-plane axes, normal, origin).
@@ -387,12 +415,18 @@ class NicsField:
         along = (self.probe_coords - origin) @ axis
 
         heights = [p["height"] for p in self.probes]
-        use_height = self.rings and all(h is not None for h in heights)
+        use_height = bool(self.rings) and all(h is not None for h in heights)
+        if use_height and self.layout["kind"] == "line":
+            # Height is only an abscissa when the scan runs along the ring
+            # normal. A scan parallel to the ring plane (an XY-scan) has the
+            # same height at every probe and would collapse onto one x value.
+            normal = self.mean_ring_normal
+            use_height = normal is not None and abs(float(axis @ normal)) >= 0.9
         if use_height:
             distance = np.array(heights, dtype=float)
             label = "height above the ring plane / A"
             # A scan running "downwards" would otherwise plot back to front.
-            if np.corrcoef(along, distance)[0, 1] < 0:
+            if len(along) > 1 and np.corrcoef(along, distance)[0, 1] < 0:
                 axis = -axis
         else:
             distance = along - along.min()
@@ -444,6 +478,11 @@ class NicsField:
 
     def write_cube(self, component, path=None, plugin_version="0.0.0", tag=None):
         """Write (or overwrite) the cube for *component*; returns its path."""
+        if self.is_gridded and not self.is_uniform:
+            raise ValueError(
+                "the probe grid is unevenly spaced, and a cube file can only "
+                "hold a constant step per axis"
+            )
         cube, origin, steps = self.grid(component)
         path = path or self.cube_path(component, tag)
         if path is None:
@@ -478,6 +517,8 @@ class NicsField:
         """The cached cube for *component* if one is on disk and still matches."""
         path = self.cube_path(component, tag)
         if not path or not os.path.exists(path):
+            return None
+        if self.is_gridded and not self.is_uniform:
             return None
         info = cube_io.read_generation_settings(path)
         if info.get("component") and info["component"] != component:
@@ -602,8 +643,10 @@ class NicsField:
             f"ORCA NICS Analyzer v{plugin_version}",
             f"Source: {os.path.basename(self.filename) if self.filename else '(memory)'}",
             f"ORCA version: {self.parser.data.get('orca_version') or 'unknown'}",
-            f"Probes: {len(self.probes)}   Real atoms: {len(self.real_coords)}"
-            f"   Rings: {len(self.rings)}",
+            (
+                f"Probes: {len(self.probes)}   Real atoms: {len(self.real_coords)}"
+                f"   Rings: {len(self.rings)}"
+            ),
             f"Layout: {self.layout['kind']}"
             + (
                 f" {'x'.join(str(n) for n in self.layout['shape'])}"
@@ -675,7 +718,7 @@ def export_all(field, folder=None, plugin_version="0.0.0"):
                     )
                 )
             except (ValueError, OSError) as e:
-                logging.warning(
+                logger.warning(
                     "[orca_nics_analyzer] cube export (%s): %s", component, e
                 )
     return written

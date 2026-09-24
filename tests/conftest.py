@@ -108,6 +108,7 @@ def fake_context(qapp, fake_plotter):
     without needing the full host application.
     """
     from unittest.mock import MagicMock
+
     from PyQt6.QtWidgets import QWidget
 
     main_window = QWidget()

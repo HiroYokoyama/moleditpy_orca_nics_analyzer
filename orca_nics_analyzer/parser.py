@@ -8,6 +8,10 @@ it, the full 3x3 tensor that ``NICS_zz`` is projected out of).
 import logging
 import re
 
+from .elements import BOHR_IN_ANGSTROM
+
+logger = logging.getLogger(__name__)
+
 # " Nucleus   8H :"  /  " Nucleus  12H:"  /  " Nucleus   0C  :"
 _NUCLEUS_RE = re.compile(r"^\s*Nucleus\s+(\d+)\s*([A-Za-z][A-Za-z0-9]*)\s*:?\s*$")
 # "   0 C     6.0000    0    12.011    1.522993   -2.161091   -0.015611"
@@ -134,7 +138,7 @@ class NicsParser:
                         "label": label,
                         "za": za,
                         "is_ghost": abs(za) < 1e-6 or label.endswith(":"),
-                        "xyz": tuple(v * 0.52917720859 for v in xyz_bohr),
+                        "xyz": tuple(v * BOHR_IN_ANGSTROM for v in xyz_bohr),
                     }
                 )
 
@@ -232,7 +236,7 @@ class NicsParser:
                         "tensor": None,
                     }
                 except ValueError:
-                    logging.debug(
+                    logger.debug(
                         "[orca_nics_analyzer] failed to parse summary line: %r",
                         lines[i],
                         exc_info=True,

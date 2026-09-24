@@ -6,14 +6,16 @@ checks the parse-and-project chain rather than a copied number.
 """
 
 import os
+from pathlib import Path
 
 import pytest
 
 np = pytest.importorskip("numpy")
 
-from orca_nics_analyzer import cube_io  # noqa: E402
-from orca_nics_analyzer.analysis import export_all, load_field  # noqa: E402
-from make_fixtures import ISO_K, RING_K, shielding_tensor  # noqa: E402
+from make_fixtures import ISO_K, RING_K, shielding_tensor
+
+from orca_nics_analyzer import cube_io
+from orca_nics_analyzer.analysis import export_all, load_field
 
 
 def expected_nics(point, axis=(0, 0, 1)):
@@ -166,7 +168,7 @@ class TestGrids:
         field = load_field(real_grid_out)
         assert field.layout["kind"] == "volume"
         assert field.layout["regular"] is True
-        cube, origin, steps = field.grid("zz")
+        cube, _origin, _steps = field.grid("zz")
         assert sorted(cube.shape) == [7, 9, 9]
         assert cube.size == 567
         assert not np.any(np.isnan(cube))
@@ -320,7 +322,7 @@ class TestCubes:
 
     def test_cube_lands_beside_the_output(self, volume_out, tmp_path):
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         path, cached = field.ensure_cube("zz", plugin_version="0.1.0")
         assert not cached
@@ -329,7 +331,7 @@ class TestCubes:
 
     def test_second_call_reuses_the_cache(self, volume_out, tmp_path):
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         path, _ = field.ensure_cube("zz", plugin_version="0.1.0")
         stamp = os.path.getmtime(path)
@@ -340,7 +342,7 @@ class TestCubes:
 
     def test_force_overwrites_the_cache(self, volume_out, tmp_path):
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         path, _ = field.ensure_cube("zz", plugin_version="0.1.0")
         os.remove(path)
@@ -351,7 +353,7 @@ class TestCubes:
     def test_stale_cache_with_a_different_grid_is_rejected(self, volume_out, tmp_path):
         """A cube from another grid must not be served for this one."""
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         path, _ = field.ensure_cube("zz", plugin_version="0.1.0")
         cube_io.write_cube(
@@ -372,7 +374,7 @@ class TestCubes:
 
     def test_cache_with_wrong_component_is_rejected(self, volume_out, tmp_path):
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         path, _ = field.ensure_cube("zz", plugin_version="0.1.0")
         cube_io.write_cube(
@@ -386,7 +388,7 @@ class TestCubes:
 
     def test_cache_with_wrong_axis_is_rejected(self, volume_out, tmp_path):
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         path, _ = field.ensure_cube("zz", plugin_version="0.1.0")
         shape = field.grid("zz")[0].shape
@@ -401,7 +403,7 @@ class TestCubes:
 
     def test_cache_is_rejected_when_the_source_changes(self, volume_out, tmp_path):
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         field.ensure_cube("zz", plugin_version="0.1.0")
         with open(source, "ab") as fh:
@@ -412,7 +414,7 @@ class TestCubes:
         self, volume_out, tmp_path
     ):
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         field = load_field(str(source))
         field.set_axis_mode("x")
         field.ensure_cube("zz", plugin_version="0.1.0")

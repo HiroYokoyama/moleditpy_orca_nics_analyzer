@@ -6,6 +6,7 @@ than the happy path.
 """
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -13,9 +14,9 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("PyQt6.QtWidgets")
 
-from orca_nics_analyzer.analysis import load_field  # noqa: E402
-from orca_nics_analyzer.gui import NicsAnalyzerDialog  # noqa: E402
-from orca_nics_analyzer.parser import NicsParser  # noqa: E402
+from orca_nics_analyzer.analysis import load_field
+from orca_nics_analyzer.gui import NicsAnalyzerDialog
+from orca_nics_analyzer.parser import NicsParser
 
 pytestmark = pytest.mark.usefixtures("qapp", "no_modals")
 
@@ -103,7 +104,7 @@ class TestMapExportFailures:
             return_value=(target, ""),
         ):
             dialog.map_tab.export_csv()
-        rows = open(target, encoding="utf-8").read().splitlines()
+        rows = Path(target).read_text(encoding="utf-8").splitlines()
         info = dialog.field.plane_data(dialog.map_tab._component())
         assert len(rows) == len(info["a2"]) + 1
         assert rows[0].startswith("axis2\\axis1,")

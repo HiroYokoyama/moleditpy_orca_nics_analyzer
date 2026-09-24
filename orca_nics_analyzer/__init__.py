@@ -13,8 +13,10 @@ geometrically, so outputs prepared by any means are understood.
 import logging
 import os
 
+logger = logging.getLogger(__name__)
+
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.5.2"
+PLUGIN_VERSION = "0.5.3"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
@@ -26,12 +28,13 @@ PLUGIN_DEPENDENCIES = ["PyQt6", "numpy", "matplotlib", "pyvista"]
 PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=4.0.0, <5.0.0"
 
 _context = None
-_dialog_opened = False
 
 
 def _read_output_file(path, parent_widget):
     """Read an ORCA output file, trying the encodings ORCA is seen to emit."""
-    for enc in ("utf-8", "utf-16", "latin-1", "cp1252"):
+    # cp1252 before latin-1: latin-1 decodes any byte, so nothing after it
+    # would ever be tried.
+    for enc in ("utf-8", "utf-16", "cp1252", "latin-1"):
         try:
             with open(path, "r", encoding=enc) as fh:
                 return fh.read()
@@ -54,6 +57,38 @@ def _warn(parent, title, text):
     QMessageBox.critical(parent, title, text)
 
 
+def parse_output_file(path, parent_widget):
+    """Read and parse *path*; a parser with NICS probes, or None.
+
+    Every failure — unreadable file, no ghost centres, ghosts without
+    shieldings — is reported to the user here, so callers only branch on None.
+    """
+    content = _read_output_file(path, parent_widget)
+    if content is None:
+        return None
+
+    from .parser import NicsParser
+
+    parser = NicsParser()
+    parser.load_from_memory(content, path)
+
+    from PyQt6.QtWidgets import QMessageBox
+
+    if not parser.data["ghost_indices"]:
+        QMessageBox.warning(
+            parent_widget,
+            "No NICS probes found",
+            "This output has no ghost atoms with NMR shielding data.\n\n"
+            "NICS requires ghost centres (e.g. 'H:') in the geometry "
+            "and an NMR job that includes them.",
+        )
+        return None
+    if not parser.data.get("probe_indices"):
+        _warn_missing_shieldings(parent_widget)
+        return None
+    return parser
+
+
 def _warn_missing_shieldings(parent):
     from PyQt6.QtWidgets import QMessageBox
 
@@ -73,28 +108,8 @@ def _open_file(path, context):
     dialog is reused; otherwise a new one is created.
     """
     mw = context.get_main_window()
-    content = _read_output_file(path, mw)
-    if content is None:
-        return
-
-    from .parser import NicsParser
-
-    parser = NicsParser()
-    parser.load_from_memory(content, path)
-
-    if not parser.data["ghost_indices"]:
-        from PyQt6.QtWidgets import QMessageBox
-
-        QMessageBox.warning(
-            mw,
-            "No NICS probes found",
-            "This output has no ghost atoms with NMR shielding data.\n\n"
-            "NICS requires ghost centres (e.g. 'H:') in the geometry "
-            "and an NMR job that includes them.",
-        )
-        return
-    if not parser.data.get("probe_indices"):
-        _warn_missing_shieldings(mw)
+    parser = parse_output_file(path, mw)
+    if parser is None:
         return
 
     existing = context.get_window("nics_analyzer")
@@ -106,14 +121,12 @@ def _open_file(path, context):
             existing.activateWindow()
             return
         except (RuntimeError, AttributeError) as e:
-            logging.warning("[orca_nics_analyzer] reusing previous window: %s", e)
+            logger.warning("[orca_nics_analyzer] reusing previous window: %s", e)
 
     from .gui import NicsAnalyzerDialog
 
     dlg = NicsAnalyzerDialog(parser, context, parent=mw)
     context.register_window("nics_analyzer", dlg)
-    global _dialog_opened
-    _dialog_opened = True
     dlg.show()
 
 
@@ -131,7 +144,7 @@ def initialize(context):
                 existing.activateWindow()
                 return
             except (RuntimeError, AttributeError):
-                logging.debug(
+                logger.debug(
                     "[orca_nics_analyzer] failed to raise existing window",
                     exc_info=True,
                 )
@@ -141,8 +154,6 @@ def initialize(context):
 
         dlg = NicsAnalyzerDialog(None, context, parent=mw)
         context.register_window("nics_analyzer", dlg)
-        global _dialog_opened
-        _dialog_opened = True
         dlg.show()
 
     context.add_menu_action("Extensions/ORCA NICS Analyzer...", open_dialog)
@@ -155,7 +166,7 @@ def initialize(context):
             try:
                 win.close()
             except (RuntimeError, AttributeError) as e:
-                logging.warning("[orca_nics_analyzer] reset close: %s", e)
+                logger.warning("[orca_nics_analyzer] reset close: %s", e)
 
     if hasattr(context, "register_document_reset_handler"):
         context.register_document_reset_handler(on_reset)

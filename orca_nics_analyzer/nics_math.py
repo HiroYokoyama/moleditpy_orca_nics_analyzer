@@ -9,62 +9,8 @@ try:
 except ImportError:  # CI installs pytest only
     np = None
 
-BOHR_PER_ANGSTROM = 1.0 / 0.52917720859
-
-#: Covalent radii in Angstrom, enough for the elements NICS work involves.
-COVALENT_RADII = {
-    "H": 0.31,
-    "He": 0.28,
-    "Li": 1.28,
-    "Be": 0.96,
-    "B": 0.84,
-    "C": 0.76,
-    "N": 0.71,
-    "O": 0.66,
-    "F": 0.57,
-    "Ne": 0.58,
-    "Na": 1.66,
-    "Mg": 1.41,
-    "Al": 1.21,
-    "Si": 1.11,
-    "P": 1.07,
-    "S": 1.05,
-    "Cl": 1.02,
-    "Ar": 1.06,
-    "K": 2.03,
-    "Ca": 1.76,
-    "Sc": 1.70,
-    "Ti": 1.60,
-    "V": 1.53,
-    "Cr": 1.39,
-    "Mn": 1.39,
-    "Fe": 1.32,
-    "Co": 1.26,
-    "Ni": 1.24,
-    "Cu": 1.32,
-    "Zn": 1.22,
-    "Ga": 1.22,
-    "Ge": 1.20,
-    "As": 1.19,
-    "Se": 1.20,
-    "Br": 1.20,
-    "Kr": 1.16,
-    "Ru": 1.46,
-    "Rh": 1.42,
-    "Pd": 1.39,
-    "Ag": 1.45,
-    "Sn": 1.39,
-    "Sb": 1.39,
-    "Te": 1.38,
-    "I": 1.39,
-    "Xe": 1.40,
-    "Pt": 1.36,
-    "Au": 1.36,
-    "Hg": 1.32,
-    "Pb": 1.46,
-    "Bi": 1.48,
-}
-_DEFAULT_RADIUS = 1.5
+from .elements import COVALENT_RADII
+from .elements import DEFAULT_COVALENT_RADIUS as _DEFAULT_RADIUS
 
 
 # ---------------------------------------------------------------------------
@@ -127,13 +73,21 @@ def anisotropy(entry):
     return s33 - 0.5 * (s11 + s22)
 
 
-def classify(value):
+#: +/- ppm band labelled non-aromatic, per component. The +/-2 ppm rule is
+#: stated for NICS(iso); iso = (xx + yy + zz) / 3, so when the response is
+#: purely out-of-plane the same ring current reads three times larger as
+#: NICS_zz, and the band is scaled to match.
+CLASSIFY_THRESHOLDS = {"iso": 2.0, "zz": 6.0}
+
+
+def classify(value, component="iso"):
     """Coarse aromaticity label for a NICS value in ppm."""
     if value is None:
         return "-"
-    if value < -2.0:
+    threshold = CLASSIFY_THRESHOLDS[component]
+    if value < -threshold:
         return "diatropic (aromatic)"
-    if value > 2.0:
+    if value > threshold:
         return "paratropic (antiaromatic)"
     return "non-aromatic"
 
@@ -272,14 +226,19 @@ def _cluster_1d(values, tol):
     order = np.argsort(values)
     reps = []
     members = []
+    total = 0.0
     for idx in order:
-        v = values[idx]
+        v = float(values[idx])
         if reps and abs(v - reps[-1]) <= tol:
             members[-1].append(idx)
-            reps[-1] = float(np.mean(values[members[-1]]))
+            # Running mean: recomputing it over the whole group each time is
+            # quadratic in the group size, which a large volume grid feels.
+            total += v
+            reps[-1] = total / len(members[-1])
         else:
-            reps.append(float(v))
+            reps.append(v)
             members.append([idx])
+            total = v
     return reps, members
 
 
@@ -395,9 +354,22 @@ def detect_layout(points, rank_tol=1e-3, cluster_tol=None):
         index_of.append(lookup)
     index_map = np.stack(index_of, axis=1)
 
-    regular = int(np.prod(counts)) == len(pts)
+    # A matching count is not enough: two probes sharing one cell would leave
+    # another cell empty yet still multiply out to the right total.
+    regular = int(np.prod(counts)) == len(pts) and len(
+        np.unique(index_map, axis=0)
+    ) == len(pts)
     if not regular and kind in ("line", "plane", "volume"):
         kind = "scattered"
+
+    # Maps cope with uneven spacing, but a cube carries one step per axis.
+    uniform = True
+    for r in reps:
+        if len(r) > 2:
+            gaps = np.diff(r)
+            mean = float(np.mean(gaps))
+            if float(np.max(np.abs(gaps - mean))) > max(1e-3, 0.02 * abs(mean)):
+                uniform = False
 
     return {
         "kind": kind,
@@ -409,6 +381,7 @@ def detect_layout(points, rank_tol=1e-3, cluster_tol=None):
         "index_map": index_map,
         "proj": proj,
         "regular": regular,
+        "uniform": uniform,
     }
 
 
@@ -419,18 +392,3 @@ def layout_grid_values(layout, values):
     for p, (i, j, k) in enumerate(layout["index_map"]):
         grid[i, j, k] = values[p]
     return grid
-
-
-def plane_axes(layout):
-    """(in-plane axis 1, in-plane axis 2, normal) for a planar layout.
-
-    The two axes with more than one distinct coordinate span the plane; the
-    remaining one is the normal, which is the z the ICSS convention projects
-    the shielding tensor onto.
-    """
-    shape = layout["shape"]
-    varying = [a for a in range(3) if shape[a] > 1]
-    fixed = [a for a in range(3) if shape[a] <= 1]
-    order = varying + fixed
-    axes = layout["axes"]
-    return axes[order[0]], axes[order[1]], axes[order[2]], order

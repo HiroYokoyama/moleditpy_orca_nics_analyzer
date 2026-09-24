@@ -6,16 +6,16 @@ wrong, so they are the ones least likely to be exercised by hand.
 
 import json
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 np = pytest.importorskip("numpy")
 
-from orca_nics_analyzer import settings as settings_mod  # noqa: E402
-from orca_nics_analyzer.analysis import load_field  # noqa: E402
-from orca_nics_analyzer.parser import NicsParser  # noqa: E402
-
+from orca_nics_analyzer import settings as settings_mod
+from orca_nics_analyzer.analysis import load_field
+from orca_nics_analyzer.parser import NicsParser
 
 # ---------------------------------------------------------------------------
 # settings: the atomic save
@@ -141,7 +141,7 @@ class TestCubeCacheRejection:
         """
         field, _ = self._written(tmp_path, volume_out)
         path = field.cube_path("zz")
-        lines = open(path, encoding="utf-8").read().splitlines()
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
         stripped = " ".join(
             part
             for part in lines[1].split()
@@ -149,7 +149,7 @@ class TestCubeCacheRejection:
         )
         assert "source_size=" in stripped and "source_mtime_ns=" in stripped
         lines[1] = stripped
-        open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+        Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
         from orca_nics_analyzer import cube_io
 
@@ -164,11 +164,11 @@ class TestCubeCacheRejection:
         """Even in grid mode: an absent axis cannot be checked, only assumed."""
         field, _ = self._written(tmp_path, volume_out)
         path = field.cube_path("zz")
-        lines = open(path, encoding="utf-8").read().splitlines()
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
         lines[1] = " ".join(
             part for part in lines[1].split() if not part.startswith("axis=")
         )
-        open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+        Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
         assert field.axis_mode == "grid"
         assert field.cached_cube("zz") is None
 

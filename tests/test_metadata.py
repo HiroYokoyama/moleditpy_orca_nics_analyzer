@@ -2,6 +2,7 @@
 
 import os
 import re
+from pathlib import Path
 
 import pytest
 
@@ -48,7 +49,7 @@ class TestMetadata:
     def test_version_matches_the_release_workflow(self):
         """release.yml checks the tag against this file; it must read this file."""
         path = os.path.join(ROOT, ".github", "workflows", "release.yml")
-        text = open(path, encoding="utf-8").read()
+        text = Path(path).read_text(encoding="utf-8")
         assert "orca_nics_analyzer/__init__.py" in text
 
 
@@ -128,7 +129,7 @@ class TestNoHeavyImportsAtModuleLoad:
         import ast
 
         path = os.path.join(ROOT, "orca_nics_analyzer", "__init__.py")
-        tree = ast.parse(open(path, encoding="utf-8").read())
+        tree = ast.parse(Path(path).read_text(encoding="utf-8"))
         top_level = []
         for node in tree.body:
             if isinstance(node, ast.Import):

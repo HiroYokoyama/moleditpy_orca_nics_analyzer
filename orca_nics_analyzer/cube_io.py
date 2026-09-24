@@ -1,8 +1,11 @@
 """Gaussian cube read/write for NICS and ICSS fields.
 
-Cubes are written beside the ORCA output in a ``<base>_nics_cubes`` folder and
-reused on the next open, so a field is computed once and stays available to
-any other cube viewer.
+Cubes are written beside the ORCA output in a ``<base>_nics_cubes`` folder, so
+the field on screen is always available to other cube viewers. The stamp on
+the second line records what a cube was made from; a cube that still matches
+is left alone rather than rewritten. The plugin never reads its own cubes
+back: rebuilding the field from the parsed output is cheaper than parsing one.
+:func:`read_cube` is the matching reader for callers and tests that do.
 """
 
 import logging
@@ -14,62 +17,11 @@ try:
 except ImportError:  # CI installs pytest only
     np = None
 
-BOHR_PER_ANGSTROM = 1.0 / 0.52917720859
+from .elements import ATOMIC_NUMBERS, BOHR_PER_ANGSTROM
+
+logger = logging.getLogger(__name__)
 
 CUBE_HEADER_PREFIX = "MoleditPy ORCA NICS Analyzer"
-
-ATOMIC_NUMBERS = {
-    "H": 1,
-    "He": 2,
-    "Li": 3,
-    "Be": 4,
-    "B": 5,
-    "C": 6,
-    "N": 7,
-    "O": 8,
-    "F": 9,
-    "Ne": 10,
-    "Na": 11,
-    "Mg": 12,
-    "Al": 13,
-    "Si": 14,
-    "P": 15,
-    "S": 16,
-    "Cl": 17,
-    "Ar": 18,
-    "K": 19,
-    "Ca": 20,
-    "Sc": 21,
-    "Ti": 22,
-    "V": 23,
-    "Cr": 24,
-    "Mn": 25,
-    "Fe": 26,
-    "Co": 27,
-    "Ni": 28,
-    "Cu": 29,
-    "Zn": 30,
-    "Ga": 31,
-    "Ge": 32,
-    "As": 33,
-    "Se": 34,
-    "Br": 35,
-    "Kr": 36,
-    "Ru": 44,
-    "Rh": 45,
-    "Pd": 46,
-    "Ag": 47,
-    "Sn": 50,
-    "Sb": 51,
-    "Te": 52,
-    "I": 53,
-    "Xe": 54,
-    "Pt": 78,
-    "Au": 79,
-    "Hg": 80,
-    "Pb": 82,
-    "Bi": 83,
-}
 
 
 def cube_dir_for(out_path):
@@ -139,7 +91,7 @@ def read_generation_settings(filepath):
             fh.readline()
             stamp = fh.readline()
     except OSError as e:
-        logging.warning("[orca_nics_analyzer] cube header %s: %s", filepath, e)
+        logger.warning("[orca_nics_analyzer] cube header %s: %s", filepath, e)
         return info
 
     m = re.search(r"ORCA NICS Analyzer v(\S+)", stamp)
@@ -241,9 +193,14 @@ def read_cube(path):
 
     shape = []
     vectors = []
+    # A negative voxel count means that axis' vector (and, by convention, the
+    # whole header) is already in Angstrom rather than Bohr.
+    header_in_angstrom = False
     for row in tokens[3:6]:
         parts = row.split()
-        shape.append(abs(int(parts[0])))
+        count = int(parts[0])
+        header_in_angstrom = header_in_angstrom or count < 0
+        shape.append(abs(count))
         vectors.append([float(v) for v in parts[1:4]])
 
     symbols, coords = [], []
@@ -264,7 +221,7 @@ def read_cube(path):
             f"cube {os.path.basename(path)} has {values.size} values, expected {total}"
         )
 
-    ang = 1.0 / BOHR_PER_ANGSTROM
+    ang = 1.0 if header_in_angstrom else 1.0 / BOHR_PER_ANGSTROM
     return {
         "comment": comment,
         "stamp": stamp,

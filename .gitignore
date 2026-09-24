@@ -1,5 +1,4 @@
 # MoleditPy plugin preset storage (per-user, not versioned)
-gaussian_input_generator_pro/settings.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -4,7 +4,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-from orca_nics_analyzer import nics_math as nm  # noqa: E402
+from orca_nics_analyzer import nics_math as nm
 
 
 def rotation(axis, angle):
@@ -78,6 +78,14 @@ class TestTensors:
 
     def test_classification_of_missing_data(self):
         assert nm.classify(None) == "-"
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [(-10.0, "diatropic"), (4.0, "non-aromatic"), (-4.0, "non-aromatic")],
+    )
+    def test_zz_classification_uses_the_scaled_band(self, value, expected):
+        # +/-2 ppm is an iso rule; NICS_zz reads ~3x larger for the same current.
+        assert expected in nm.classify(value, "zz")
 
 
 class TestRings:
@@ -309,12 +317,3 @@ class TestLayoutFallbacks:
 
     def test_no_probes_at_all(self):
         assert nm.detect_layout([])["kind"] == "none"
-
-    def test_plane_axes_put_the_flat_axis_last(self):
-        import numpy as np
-
-        pts = [[x, y, 0.0] for x in range(3) for y in range(3)]
-        layout = nm.detect_layout(pts)
-        _, _, normal, order = nm.plane_axes(layout)
-        assert layout["shape"][order[2]] == 1
-        assert abs(np.dot(normal, [0, 0, 1.0])) == pytest.approx(1.0)

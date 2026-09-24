@@ -7,7 +7,7 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("PyQt6.QtWidgets")
 
-import orca_nics_analyzer as plugin  # noqa: E402
+import orca_nics_analyzer as plugin
 
 pytestmark = pytest.mark.usefixtures("qapp")
 
@@ -57,11 +57,6 @@ class TestOpenFile:
         dialog = opened(volume_out)
         assert dialog is not None
         fake_context.register_window.assert_any_call("nics_analyzer", dialog)
-
-    def test_marks_the_plugin_as_used(self, opened, volume_out):
-        plugin._dialog_opened = False
-        opened(volume_out)
-        assert plugin._dialog_opened
 
     def test_output_without_probes_is_refused(self, no_ghosts_out, fake_context):
         with patch("PyQt6.QtWidgets.QMessageBox.warning") as warn:

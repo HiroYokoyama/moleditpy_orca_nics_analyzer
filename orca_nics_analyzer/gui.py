@@ -7,9 +7,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QDoubleSpinBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -31,6 +31,8 @@ from .settings import (
     load_settings,
     save_settings,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Label -> axis_mode for the NICS_zz reference direction.
 AXIS_CHOICES = (
@@ -113,6 +115,14 @@ class NicsAnalyzerDialog(QDialog):
         self.context = context
         self.settings_file = settings_file or SETTINGS_FILE
         self.field = None
+        # Built per loaded file by _build_tabs; None until the first load.
+        self.probe_tab = None
+        self.scan_tab = None
+        self.map_tab = None
+        self.icss_tab = None
+        self.summary = None
+        self._loading_structure = False
+        self._cleaned_up = False
 
         self.setWindowTitle("ORCA NICS Analyzer")
         self.resize(940, 780)
@@ -192,6 +202,9 @@ class NicsAnalyzerDialog(QDialog):
             spin.setDecimals(4)
             spin.setSingleStep(0.1)
             spin.setPrefix(f"{component}=")
+            # Recompute on Enter / focus-out / arrow steps, not per keystroke:
+            # every change reprojects all probes and redraws the 3D view.
+            spin.setKeyboardTracking(False)
             spin.setValue(1.0 if component == "z" else 0.0)
             spin.valueChanged.connect(self._on_axis_changed)
             self._axis_vector.append(spin)
@@ -216,6 +229,9 @@ class NicsAnalyzerDialog(QDialog):
         tabs_layout = QVBoxLayout(self._tabs_container)
         tabs_layout.setContentsMargins(0, 0, 0, 0)
         self.tabs = QTabWidget()
+        # Connected once here: _build_tabs runs again on every file load, and
+        # a connection made there would stack up and redraw once per load.
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         tabs_layout.addWidget(self.tabs, 1)
         self._stack.addWidget(self._tabs_container)  # index 1
 
@@ -233,8 +249,21 @@ class NicsAnalyzerDialog(QDialog):
 
     def _build_tabs(self):
         """Construct (or reconstruct) the tab widget for the current field."""
-        # Clear any previously built tabs.
+        # Tab switches during the rebuild must not reach _on_tab_changed: it
+        # would act on the half-built set, and _apply_parser draws afterwards.
+        self.tabs.blockSignals(True)
+        try:
+            self._build_tabs_unsignalled()
+        finally:
+            self.tabs.blockSignals(False)
+
+    def _build_tabs_unsignalled(self):
+        # QTabWidget.clear() only hides the pages; delete them, or every
+        # reload leaks the previous file's figures and field.
+        old_pages = [self.tabs.widget(i) for i in range(self.tabs.count())]
         self.tabs.clear()
+        for page in old_pages:
+            page.deleteLater()
 
         from .probe_tab import ProbeTab
 
@@ -249,6 +278,7 @@ class NicsAnalyzerDialog(QDialog):
             plugin_version=PLUGIN_VERSION,
             parent=self,
             show_in_2d=self._show_map_tab,
+            vector_checkbox=self._vector_chk,
         )
 
         from .scan1d_tab import Scan1DTab
@@ -264,6 +294,8 @@ class NicsAnalyzerDialog(QDialog):
             show_in_3d=self._show_plane_in_3d,
             show_slice_in_1d=self._show_slice_in_1d,
             clear_3d=self.icss_tab.clear_actors,
+            # The 3D tab owns the slice slider; the map shows that slice.
+            slice_index=self.icss_tab.slice_slider.value,
         )
         self.tabs.addTab(self.map_tab, "2D Map")
         self.tabs.addTab(self.icss_tab, "3D ICSS")
@@ -284,51 +316,26 @@ class NicsAnalyzerDialog(QDialog):
             )
         )
 
-        self.map_tab.vmax.valueChanged.connect(self._set_3d_display_range)
-        self.map_tab.auto_range.toggled.connect(self._set_3d_auto_display_range)
-        # An auto-computed range is written into vmax with signals blocked, so
-        # this is the only way the 3D plane learns the scale the 2D map used.
-        self.map_tab._on_range_computed = self.icss_tab.set_display_range
-
+        # The 3D plane shares the map's colour range. The isosurfaces do not
+        # use it, so these only update the plane, never redraw the surfaces.
+        self.map_tab.vmax.valueChanged.connect(self.icss_tab.set_display_range)
+        self.map_tab.auto_range.toggled.connect(self.icss_tab.set_auto_display_range)
+        self.map_tab.range_computed.connect(self.icss_tab.set_display_range)
         self.map_tab.component.currentIndexChanged.connect(self._sync_component_to_3d)
-        self.map_tab.cmap.currentTextChanged.connect(self._refresh_3d_from_map)
-        self.map_tab.vmax.valueChanged.connect(self._refresh_3d_from_map)
-        self.map_tab.auto_range.toggled.connect(self._refresh_3d_from_map)
-        self.map_tab.component.currentIndexChanged.connect(
-            self._refresh_3d_plane_if_map_visible
-        )
-        self.map_tab.cmap.currentTextChanged.connect(
-            self._refresh_3d_plane_if_map_visible
-        )
-        self.map_tab.vmax.valueChanged.connect(self._refresh_3d_plane_if_map_visible)
-        self.map_tab.auto_range.toggled.connect(self._refresh_3d_plane_if_map_visible)
+        for signal in (
+            self.map_tab.component.currentIndexChanged,
+            self.map_tab.cmap.currentTextChanged,
+            self.map_tab.vmax.valueChanged,
+            self.map_tab.auto_range.toggled,
+        ):
+            signal.connect(self._refresh_3d_plane_if_map_visible)
 
-        self.icss_tab._on_slice_settings_changed = self._refresh_map_if_visible
-        self.map_tab._get_slice_index = lambda: (
-            self.icss_tab.slice_slider.value()
-            if hasattr(self.icss_tab, "slice_slider")
-            else 0
-        )
-        self.map_tab._set_slice_value_label = lambda t: (
-            self.icss_tab.slice_value.setText(t)
-            if hasattr(self.icss_tab, "slice_value")
-            else None
-        )
-
-        self.icss_tab.show_vector.toggled.connect(self._sync_vector_chk_from_icss)
+        self.icss_tab.slice_settings_changed.connect(self._refresh_map_if_visible)
 
         self.summary = QTextEdit()
         self.summary.setReadOnly(True)
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
         self.tabs.addTab(self.summary, "Summary")
-
-        self.map_tab._is_tab_visible = lambda: self.tabs.currentWidget() is self.map_tab
-        self.icss_tab._is_tab_visible = lambda: (
-            self.tabs.currentWidget() is self.icss_tab
-        )
-        self.scan_tab._is_tab_visible = lambda: (
-            self.tabs.currentWidget() is self.scan_tab
-        )
 
         self._load_settings()
         self._select_default_tab()
@@ -368,7 +375,6 @@ class NicsAnalyzerDialog(QDialog):
             )
 
         self._build_tabs()
-        self.tabs.currentChanged.connect(self._on_tab_changed)
         self._stack.setCurrentIndex(1)
         self.status.setText(self._layout_hint())
 
@@ -401,30 +407,10 @@ class NicsAnalyzerDialog(QDialog):
 
         Returns True on success, False on failure (error already shown to user).
         """
-        from . import _read_output_file
-        from .parser import NicsParser
+        from . import parse_output_file
 
-        mw = self.context.get_main_window()
-        content = _read_output_file(path, mw)
-        if content is None:
-            return False
-
-        parser = NicsParser()
-        parser.load_from_memory(content, path)
-
-        if not parser.data["ghost_indices"]:
-            QMessageBox.warning(
-                self,
-                "No NICS probes found",
-                "This output has no ghost atoms with NMR shielding data.\n\n"
-                "NICS requires ghost centres (e.g. 'H:') in the geometry "
-                "and an NMR job that includes them.",
-            )
-            return False
-        if not parser.data.get("probe_indices"):
-            from . import _warn_missing_shieldings
-
-            _warn_missing_shieldings(self)
+        parser = parse_output_file(path, self)
+        if parser is None:
             return False
 
         self.load_parser(parser)
@@ -470,13 +456,13 @@ class NicsAnalyzerDialog(QDialog):
             if plotter is not None:
                 plotter.reset_camera()
         except Exception as e:  # noqa: BLE001
-            logging.warning("[orca_nics_analyzer] show_xyz_data: %s", e)
+            logger.warning("[orca_nics_analyzer] show_xyz_data: %s", e)
         finally:
             self._loading_structure = False
 
     # -- drag-and-drop -------------------------------------------------------
 
-    def dragEnterEvent(self, event: QDragEnterEvent):  # noqa: N802
+    def dragEnterEvent(self, event: QDragEnterEvent):
         mime = event.mimeData()
         if mime.hasUrls():
             for url in mime.urls():
@@ -487,15 +473,14 @@ class NicsAnalyzerDialog(QDialog):
                         return
         event.ignore()
 
-    def dropEvent(self, event: QDropEvent):  # noqa: N802
+    def dropEvent(self, event: QDropEvent):
         for url in event.mimeData().urls():
             if url.isLocalFile():
                 path = url.toLocalFile()
                 ext = os.path.splitext(path)[1].lower()
-                if ext in _ACCEPTED_EXTENSIONS:
-                    if self.load_file(path):
-                        event.acceptProposedAction()
-                        return
+                if ext in _ACCEPTED_EXTENSIONS and self.load_file(path):
+                    event.acceptProposedAction()
+                    return
         event.ignore()
 
     # -- persistent user preferences -----------------------------------------
@@ -554,7 +539,6 @@ class NicsAnalyzerDialog(QDialog):
         self.icss_tab.show_positive.setChecked(bool(settings["icss_positive"]))
         self.icss_tab.show_negative.setChecked(bool(settings["icss_negative"]))
         self.icss_tab.show_cut_axis.setChecked(bool(settings["icss_cut_axis"]))
-        self.icss_tab.show_vector.setChecked(bool(settings["icss_show_vector"]))
 
     def _settings_values(self):
         return {
@@ -583,7 +567,7 @@ class NicsAnalyzerDialog(QDialog):
         }
 
     def _save_settings(self):
-        if hasattr(self, "map_tab") and hasattr(self, "icss_tab"):
+        if self.map_tab is not None and self.icss_tab is not None:
             save_settings(self._settings_values(), self.settings_file)
 
     # -- tab selection / hints -----------------------------------------------
@@ -634,25 +618,9 @@ class NicsAnalyzerDialog(QDialog):
         self.tabs.setCurrentWidget(self.scan_tab)
 
     def _sync_component_to_3d(self, index):
+        # The 3D tab's own component handler redraws it when it is on show.
         if self.icss_tab.component.currentIndex() != index:
             self.icss_tab.component.setCurrentIndex(index)
-        self.icss_tab.draw(
-            silent=True, force=self.tabs.currentWidget() is self.icss_tab
-        )
-
-    def _set_3d_display_range(self, value):
-        self.icss_tab.set_display_range(value)
-        self._refresh_3d_from_map()
-
-    def _set_3d_auto_display_range(self, checked):
-        self.icss_tab.set_auto_display_range(checked)
-        self._refresh_3d_from_map()
-
-    def _refresh_3d_from_map(self, *_):
-        """Apply shared 2D settings when the 3D tab is visible."""
-        self.icss_tab.draw(
-            silent=True, force=self.tabs.currentWidget() is self.icss_tab
-        )
 
     def _refresh_map_if_visible(self):
         if self.tabs.currentWidget() is self.map_tab:
@@ -668,32 +636,33 @@ class NicsAnalyzerDialog(QDialog):
         try:
             self.icss_tab.show_plane(
                 self.map_tab.component.currentData(),
-                self.map_tab._get_slice_index(),
+                self.map_tab.current_slice_index(),
             )
         except (ValueError, RuntimeError) as exc:
-            logging.debug("[orca_nics_analyzer] auto 2D plane: %s", exc)
+            logger.debug("[orca_nics_analyzer] auto 2D plane: %s", exc)
 
     def _show_map_tab(self):
         """Switch to the 2D Map tab."""
-        if hasattr(self, "map_tab"):
-            self.map_tab.refresh(force=True)
+        if self.map_tab is None:
+            return
+        self.map_tab.refresh(force=True)
         self.tabs.setCurrentWidget(self.map_tab)
 
     def _on_tab_changed(self, index):
         widget = self.tabs.widget(index)
-        if not hasattr(self, "icss_tab"):
+        if self.icss_tab is None:
             return
 
         # Each tab owns its graphics; clear stale plugin actors before switching.
         self.icss_tab.clear_actors()
         if widget is self.icss_tab:
             self.icss_tab.draw(silent=True, force=True)
-        elif hasattr(self, "map_tab") and widget is self.map_tab:
+        elif widget is self.map_tab:
             self.map_tab.refresh(force=True)
             self._refresh_3d_plane_if_map_visible()
             if self._vector_chk.isChecked():
                 self.icss_tab.update_axis_vector()
-        elif hasattr(self, "scan_tab") and widget is self.scan_tab:
+        elif widget is self.scan_tab:
             self.scan_tab.refresh(force=True)
             if self._vector_chk.isChecked():
                 self.icss_tab.update_axis_vector()
@@ -721,6 +690,9 @@ class NicsAnalyzerDialog(QDialog):
             self.status.setText(str(exc))
             return
         self.probe_tab.refresh()
+        # A slice sent over from the 2D map holds NICS_zz values projected on
+        # the old axis; cut it again so the 1D tab does not show stale numbers.
+        self.scan_tab.reextract_slice()
         self.scan_tab.refresh(force=self.tabs.currentWidget() is self.scan_tab)
         self._refresh_map_if_visible()
         self.icss_tab._update_cache_label()
@@ -728,19 +700,10 @@ class NicsAnalyzerDialog(QDialog):
         self.icss_tab.update_axis_vector()
         self.summary.setPlainText(self.field.summary_text(PLUGIN_VERSION))
 
-    def _on_vector_toggled(self, checked):
-        if hasattr(self, "icss_tab") and hasattr(self.icss_tab, "show_vector"):
-            if self.icss_tab.show_vector.isChecked() != checked:
-                self.icss_tab.show_vector.blockSignals(True)
-                self.icss_tab.show_vector.setChecked(checked)
-                self.icss_tab.show_vector.blockSignals(False)
+    def _on_vector_toggled(self, _checked):
+        # The 3D tab reads this same checkbox, so it only needs a redraw.
+        if self.icss_tab is not None:
             self.icss_tab.update_axis_vector()
-
-    def _sync_vector_chk_from_icss(self, checked):
-        if hasattr(self, "_vector_chk") and self._vector_chk.isChecked() != checked:
-            self._vector_chk.blockSignals(True)
-            self._vector_chk.setChecked(checked)
-            self._vector_chk.blockSignals(False)
 
     def _on_probe_visibility_toggled(self, checked):
         self._load_molecule(include_probes=checked)
@@ -755,7 +718,7 @@ class NicsAnalyzerDialog(QDialog):
         try:
             written = export_all(self.field, folder, PLUGIN_VERSION)
         except (ValueError, OSError) as e:
-            logging.warning("[orca_nics_analyzer] export all: %s", e)
+            logger.warning("[orca_nics_analyzer] export all: %s", e)
             QMessageBox.critical(self, "Export failed", str(e))
             return
         names = "\n".join(os.path.basename(p) for p in written)
@@ -769,23 +732,22 @@ class NicsAnalyzerDialog(QDialog):
 
     def _shutdown_tabs(self):
         """Release 2D/3D resources from the currently loaded tabs, if any."""
-        for attr in ("map_tab", "scan_tab"):
-            tab = getattr(self, attr, None)
+        for tab in (self.map_tab, self.scan_tab):
             if tab is not None:
                 tab.shutdown()
-        icss = getattr(self, "icss_tab", None)
+        icss = self.icss_tab
         if icss is not None:
             try:
                 icss.clear_actors()
             except (RuntimeError, AttributeError) as e:
-                logging.warning("[orca_nics_analyzer] clearing actors on reload: %s", e)
+                logger.warning("[orca_nics_analyzer] clearing actors on reload: %s", e)
 
     def _cleanup(self):
         """Take our actors out of the host viewer and release the window slot.
 
         Runs at most once, from both closing paths.
         """
-        if getattr(self, "_cleaned_up", False):
+        if self._cleaned_up:
             return
         self._cleaned_up = True
         self._save_settings()
@@ -795,9 +757,13 @@ class NicsAnalyzerDialog(QDialog):
             # live window instead of raising a deleted one.
             self.context.register_window("nics_analyzer", None)
         except (RuntimeError, AttributeError) as e:
-            logging.warning("[orca_nics_analyzer] deregistering window: %s", e)
+            logger.warning("[orca_nics_analyzer] deregistering window: %s", e)
+        # The host main window is the parent, so a closed dialog would live
+        # (with its figures and field) until the app exits. The next open
+        # builds a fresh one, since the registry slot is now empty.
+        self.deleteLater()
 
-    def closeEvent(self, event):  # noqa: N802
+    def closeEvent(self, event):
         # No super() call: QDialog.closeEvent rejects, reject() calls close(),
         # and that would re-enter this handler.
         self._cleanup()

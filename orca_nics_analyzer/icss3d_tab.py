@@ -4,8 +4,7 @@ import logging
 import os
 
 import numpy as np
-
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,6 +29,9 @@ except ImportError:  # pyvista is an optional dependency
 
 from . import cube_io
 from .map2d_tab import COLORMAPS
+from .tab_util import is_current_tab
+
+logger = logging.getLogger(__name__)
 
 #: Actor names, so a redraw replaces its own actors and nothing else.
 ACTOR_POSITIVE = "nics_icss_positive"
@@ -48,23 +50,30 @@ ALL_ACTORS = (
 )
 
 
-def structured_grid(data, origin, steps):
+def structured_grid(data, origin, steps, points=None):
     """A PyVista grid for a field sampled on possibly non-orthogonal axes.
 
     A ring-frame NICS grid is not axis-aligned, so ImageData cannot represent
-    it; the points are built explicitly instead.
+    it; the points are built explicitly instead. ``points`` (shape
+    ``data.shape + (3,)``) overrides the origin/steps construction, which is
+    how an unevenly spaced grid keeps its real probe positions.
     """
     if pv is None:
         raise RuntimeError("pyvista is not installed")
     data = np.asarray(data, dtype=float)
     n1, n2, n3 = data.shape
-    i, j, k = np.meshgrid(np.arange(n1), np.arange(n2), np.arange(n3), indexing="ij")
-    pts = (
-        np.asarray(origin, dtype=float)
-        + i[..., None] * steps[0]
-        + j[..., None] * steps[1]
-        + k[..., None] * steps[2]
-    )
+    if points is not None:
+        pts = np.asarray(points, dtype=float)
+    else:
+        i, j, k = np.meshgrid(
+            np.arange(n1), np.arange(n2), np.arange(n3), indexing="ij"
+        )
+        pts = (
+            np.asarray(origin, dtype=float)
+            + i[..., None] * steps[0]
+            + j[..., None] * steps[1]
+            + k[..., None] * steps[2]
+        )
     grid = pv.StructuredGrid()
     grid.points = pts.reshape(-1, 3, order="F")
     grid.dimensions = (n1, n2, n3)
@@ -125,7 +134,14 @@ def _resample_plane(values, a1, a2, target=_PLANE_SMOOTH_POINTS):
 
 
 class Icss3DTab(QWidget):
-    """Isovalue controls plus cube generation/caching."""
+    """Isovalue controls plus cube generation/caching.
+
+    ``vector_checkbox`` is the dialog's "Show NICS_zz vector" checkbox, which
+    this tab reads; without one the tab keeps a private, hidden checkbox.
+    """
+
+    #: The cut axis or slice moved, so a 2D view of this volume is stale.
+    slice_settings_changed = pyqtSignal()
 
     def __init__(
         self,
@@ -134,13 +150,17 @@ class Icss3DTab(QWidget):
         plugin_version="0.0.0",
         parent=None,
         show_in_2d=None,
+        vector_checkbox=None,
     ):
         super().__init__(parent)
         self.field = field
         self._plotter_getter = plotter_getter
         self.plugin_version = plugin_version
         self._show_in_2d = show_in_2d
-        self._is_tab_visible = lambda: True
+        self._vector_checkbox = vector_checkbox or QCheckBox()
+        # (component, axis mode, custom axis) of the cube last auto-saved, so
+        # a redraw with nothing changed skips re-validating the file on disk.
+        self._saved_cube_key = None
         self._display_span = 10.0
         self._auto_display_range = True
         self._actors = set()
@@ -247,7 +267,7 @@ class Icss3DTab(QWidget):
 
         self.show_cut_axis = QCheckBox("Cut axis preview")
         self.show_cut_axis.setChecked(False)
-        self.show_cut_axis.toggled.connect(self._maybe_draw)
+        self.show_cut_axis.toggled.connect(self.update_cut_axis_preview)
         s2d.addWidget(self.show_cut_axis)
 
         self.goto_2d_btn = QPushButton("→ 2D Map tab")
@@ -287,14 +307,15 @@ class Icss3DTab(QWidget):
         self.stack_axis_combo.blockSignals(False)
 
         try:
-            info = self.field.plane_data(
-                self.component.currentData() if hasattr(self, "component") else "zz"
-            )
+            info = self.field.plane_data(self.component.currentData())
         except ValueError:
             return
         n = info["n_slices"]
+        # Blocked like the spin box: the caller announces the change once.
+        self.slice_slider.blockSignals(True)
         self.slice_slider.setMaximum(max(0, n - 1))
         self.slice_slider.setValue(info["slice_index"])
+        self.slice_slider.blockSignals(False)
 
         self.slice_spin.blockSignals(True)
         self.slice_spin.setMaximum(max(0, n - 1))
@@ -308,37 +329,27 @@ class Icss3DTab(QWidget):
         if self._show_in_2d is not None:
             self._show_in_2d()
 
+    # The isosurfaces do not depend on the slice, so moving it only updates
+    # the cut-plane preview and tells the 2D view; no full redraw.
     def _on_stack_axis_changed(self, index):
         self.field.set_stack_axis(index)
         self._configure_slices()
         self.update_cut_axis_preview()
-        self._maybe_draw()
-        if hasattr(self, "_on_slice_settings_changed"):
-            self._on_slice_settings_changed()
+        self.slice_settings_changed.emit()
 
     def _on_slice_changed(self, value):
         self.slice_spin.blockSignals(True)
         self.slice_spin.setValue(value)
         self.slice_spin.blockSignals(False)
         self.update_cut_axis_preview()
-        self._maybe_draw()
-        if (
-            hasattr(self, "_on_slice_settings_changed")
-            and self._on_slice_settings_changed
-        ):
-            self._on_slice_settings_changed()
+        self.slice_settings_changed.emit()
 
     def _on_slice_spin_changed(self, value):
         self.slice_slider.blockSignals(True)
         self.slice_slider.setValue(value)
         self.slice_slider.blockSignals(False)
         self.update_cut_axis_preview()
-        self._maybe_draw()
-        if (
-            hasattr(self, "_on_slice_settings_changed")
-            and self._on_slice_settings_changed
-        ):
-            self._on_slice_settings_changed()
+        self.slice_settings_changed.emit()
 
     def _build_cube_ui(self, layout):
         cube_group = QGroupBox("Cube file")
@@ -400,25 +411,27 @@ class Icss3DTab(QWidget):
         if finite.size:
             peak = float(np.max(np.abs(finite)))
             if peak > 0:
+                # Blocked: the component change that led here draws once
+                # itself, and a second draw from this setValue would repeat it.
+                self.isovalue.blockSignals(True)
                 self.isovalue.setValue(max(0.05, round(peak / 10.0, 2)))
+                self.isovalue.blockSignals(False)
         self._sync_slider_from_spin(self.isovalue.value())
 
     @property
     def show_vector(self):
-        """Delegate vector checkbox queries to top header controls or local fallback."""
-        win = self.window()
-        if hasattr(win, "_vector_chk"):
-            return win._vector_chk
-        if not hasattr(self, "_fallback_vector_chk"):
-            self._fallback_vector_chk = QCheckBox()
-        return self._fallback_vector_chk
+        """The checkbox that decides whether the NICS_zz arrow is drawn."""
+        return self._vector_checkbox
+
+    def _is_tab_visible(self):
+        return is_current_tab(self)
 
     # -- drawing ---------------------------------------------------------
     def _plotter(self):
         try:
             return self._plotter_getter()
-        except Exception as e:
-            logging.warning("[orca_nics_analyzer] no plotter: %s", e)
+        except (RuntimeError, AttributeError) as e:  # host window torn down
+            logger.warning("[orca_nics_analyzer] no plotter: %s", e)
             return None
 
     def _cmap_and_span(self):
@@ -452,7 +465,8 @@ class Icss3DTab(QWidget):
             color_neg = mcolors.to_hex(cmap(0.0))
             color_pos = mcolors.to_hex(cmap(1.0))
             return color_neg, color_pos
-        except Exception:
+        except (ImportError, KeyError, ValueError):
+            # No matplotlib, or a colormap name it does not know.
             return "#3c6ec8", "#c8463c"
 
     def draw(self, silent=False, force=False):
@@ -494,17 +508,28 @@ class Icss3DTab(QWidget):
         # Persist the rendered component beside the source output. This is
         # intentionally best-effort: memory-only fields and read-only folders
         # can still be visualized, while ensure_cube reuses a valid cache.
-        if self.field.filename:
+        key = self._cube_key(component)
+        saved_path = self.field.cube_path(component)
+        stale = key != self._saved_cube_key or not (
+            saved_path and os.path.exists(saved_path)
+        )
+        if self.field.filename and self.field.is_uniform and stale:
             try:
                 self.field.ensure_cube(
                     component, plugin_version=self.plugin_version, force=False
                 )
+                self._saved_cube_key = key
                 self._update_cache_label()
             except (ValueError, OSError) as e:
-                logging.warning("[orca_nics_analyzer] auto cube save: %s", e)
+                logger.warning("[orca_nics_analyzer] auto cube save: %s", e)
 
         self.clear_actors()
-        grid = structured_grid(np.nan_to_num(cube, nan=0.0), origin, steps)
+        grid = structured_grid(
+            np.nan_to_num(cube, nan=0.0),
+            origin,
+            steps,
+            points=None if self.field.is_uniform else self.field.grid_points(),
+        )
         level = self.isovalue.value()
         opacity = self.opacity.value()
 
@@ -519,7 +544,7 @@ class Icss3DTab(QWidget):
             try:
                 surface = grid.contour(isosurfaces=[value], scalars="values")
             except (ValueError, RuntimeError) as e:
-                logging.warning("[orca_nics_analyzer] contour %s: %s", value, e)
+                logger.warning("[orca_nics_analyzer] contour %s: %s", value, e)
                 continue
             if surface.n_points == 0:
                 continue
@@ -547,6 +572,14 @@ class Icss3DTab(QWidget):
                 f"Drew {drawn} isosurface(s) at +/-{level:.2f} ppm "
                 f"on a {'x'.join(str(n) for n in cube.shape)} grid."
             )
+
+    def _cube_key(self, component):
+        custom = self.field.custom_axis
+        return (
+            component,
+            self.field.axis_mode,
+            None if custom is None else tuple(float(v) for v in custom),
+        )
 
     def update_axis_vector(self, *_):
         """Show the selected NICS_zz direction as an arrow in the 3D view."""
@@ -598,8 +631,8 @@ class Icss3DTab(QWidget):
         self._actors.add(ACTOR_AXIS_VECTOR)
         try:
             plotter.render()
-        except Exception as e:
-            logging.debug("[orca_nics_analyzer] axis-vector render: %s", e)
+        except (RuntimeError, AttributeError) as e:  # renderer torn down
+            logger.debug("[orca_nics_analyzer] axis-vector render: %s", e)
 
     def update_cut_axis_preview(self, *_):
         """Update the arrow showing the current slice axis for 3D volumes."""
@@ -635,9 +668,7 @@ class Icss3DTab(QWidget):
 
                 origin = self.field.layout["origin"]
 
-                slice_idx = (
-                    self.slice_slider.value() if hasattr(self, "slice_slider") else 0
-                )
+                slice_idx = self.slice_slider.value()
                 idx_coord = (
                     float(coords[stack_idx][slice_idx])
                     if slice_idx < len(coords[stack_idx])
@@ -692,8 +723,8 @@ class Icss3DTab(QWidget):
                 self._actors.add(ACTOR_CUT_AXIS_EDGE)
         try:
             plotter.render()
-        except Exception as e:  # host renderers may fail after widget teardown
-            logging.debug("[orca_nics_analyzer] cut-axis render: %s", e)
+        except (RuntimeError, AttributeError) as e:  # renderer torn down
+            logger.debug("[orca_nics_analyzer] cut-axis render: %s", e)
 
     def show_plane(self, component, slice_index):
         """Drop one map slice into the 3D viewer as a coloured plane."""
@@ -748,7 +779,7 @@ class Icss3DTab(QWidget):
         try:
             plotter.remove_actor(name)
         except (KeyError, RuntimeError, AttributeError) as e:
-            logging.debug("[orca_nics_analyzer] remove %s: %s", name, e)
+            logger.debug("[orca_nics_analyzer] remove %s: %s", name, e)
         self._actors.discard(name)
 
     def clear_actors(self):
@@ -762,7 +793,7 @@ class Icss3DTab(QWidget):
         try:
             plotter.render()
         except (RuntimeError, AttributeError) as e:
-            logging.debug("[orca_nics_analyzer] render after clear: %s", e)
+            logger.debug("[orca_nics_analyzer] render after clear: %s", e)
 
     # -- cube ------------------------------------------------------------
     def _update_cache_label(self):
@@ -773,14 +804,16 @@ class Icss3DTab(QWidget):
                 "The source file location is unknown — use 'Save cube as...'."
             )
             return
+        if self.field.is_gridded and not self.field.is_uniform:
+            self.cache_label.setText(
+                "The probe grid is unevenly spaced, so it cannot be written as "
+                "a cube (the format holds one step per axis)."
+            )
+            return
         cached = self.field.cached_cube(component)
         if cached:
             info = cube_io.read_generation_settings(cached)
-            grid = (
-                "x".join(str(g) for g in info["grid"])
-                if info["grid"]
-                else "unknown grid"
-            )
+            grid = "x".join(str(g) for g in info["grid"] or ()) or "unknown grid"
             version = f", v{info['version']}" if info["version"] else ""
             self.cache_label.setText(
                 f"Cached: {os.path.basename(cached)} ({grid}{version})"
@@ -807,7 +840,7 @@ class Icss3DTab(QWidget):
                 component, plugin_version=self.plugin_version, force=force
             )
         except (ValueError, OSError) as e:
-            logging.warning("[orca_nics_analyzer] cube generation: %s", e)
+            logger.warning("[orca_nics_analyzer] cube generation: %s", e)
             QMessageBox.critical(self, "Cube export failed", str(e))
             return None
         self._update_cache_label()
@@ -833,7 +866,7 @@ class Icss3DTab(QWidget):
                 component, path=path, plugin_version=self.plugin_version
             )
         except (ValueError, OSError) as e:
-            logging.warning("[orca_nics_analyzer] save cube as: %s", e)
+            logger.warning("[orca_nics_analyzer] save cube as: %s", e)
             QMessageBox.critical(self, "Save failed", str(e))
             return
         self.status.setText(f"Wrote cube: {path}")

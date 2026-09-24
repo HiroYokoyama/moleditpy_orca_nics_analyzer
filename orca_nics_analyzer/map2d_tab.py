@@ -9,7 +9,7 @@ import logging
 import os
 
 import numpy as np
-
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -26,7 +26,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PyQt6.QtCore import Qt
 
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -40,6 +39,9 @@ except ImportError:  # matplotlib is an optional dependency
     Figure = None
 
 from . import nics_math as nm
+from .tab_util import is_current_tab
+
+logger = logging.getLogger(__name__)
 
 
 def _get_available_colormaps():
@@ -73,13 +75,13 @@ def _get_available_colormaps():
     try:
         from matplotlib import colormaps as mpl_colormaps
 
-        all_cmaps = sorted(list(mpl_colormaps))
-    except Exception:
+        all_cmaps = sorted(mpl_colormaps)
+    except ImportError:  # matplotlib < 3.5 has no registry object
         try:
             import matplotlib.pyplot as plt
 
-            all_cmaps = sorted(list(plt.colormaps()))
-        except Exception:
+            all_cmaps = sorted(plt.colormaps())
+        except ImportError:
             all_cmaps = []
 
     seen = set()
@@ -118,20 +120,34 @@ class Map2DTab(QWidget):
 
     ``show_slice_in_1d`` is an optional callback ``(data_dict) -> None``
     supplied by the parent dialog to route extracted 1D slices to the scan tab.
+    ``slice_index`` is an optional callable returning which slice of a volume
+    to show; the 3D tab owns that control. Without it the first slice is used.
     """
 
+    #: The +/- ppm range each redraw used. An auto range is written into the
+    #: spin box with signals blocked, so this is how the 3D plane learns it.
+    range_computed = pyqtSignal(float)
+
     def __init__(
-        self, field, parent=None, show_in_3d=None, show_slice_in_1d=None, clear_3d=None
+        self,
+        field,
+        parent=None,
+        show_in_3d=None,
+        show_slice_in_1d=None,
+        clear_3d=None,
+        slice_index=None,
     ):
         super().__init__(parent)
         self.field = field
         self._show_in_3d = show_in_3d
         self._show_slice_in_1d = show_slice_in_1d
         self._clear_3d = clear_3d
-        self._is_tab_visible = lambda: True
-        #: Set by the parent dialog to mirror the effective +/- ppm range onto
-        #: the 3D plane, which cannot see the auto-computed value otherwise.
-        self._on_range_computed = None
+        self._slice_index_getter = slice_index
+        # A window drag fires resize events by the dozen; redraw once it rests.
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.setInterval(80)
+        self._resize_timer.timeout.connect(self._on_resize_settled)
         #: The last range the user typed, which is what gets remembered.
         self.manual_span = None
         self.canvas = None
@@ -144,26 +160,27 @@ class Map2DTab(QWidget):
         layout = QVBoxLayout(self)
 
         if FigureCanvas is None:
+            # The controls are still built below: the dialog wires to them and
+            # restores settings into them whether or not a map can be drawn.
             layout.addWidget(
                 QLabel(
                     "matplotlib is not installed.\n\n"
                     "Install it to see 2D NICS maps:  pip install matplotlib"
-                )
+                ),
+                1,
             )
-            return
+        else:
+            self.figure = Figure(figsize=(6, 5))
+            self.canvas = FigureCanvas(self.figure)
+            orig_resize = self.canvas.resizeEvent
 
-        self.figure = Figure(figsize=(6, 5))
-        self.canvas = FigureCanvas(self.figure)
-        orig_resize = self.canvas.resizeEvent
+            def on_resize(event):
+                orig_resize(event)
+                self._resize_timer.start()
 
-        def on_resize(event):
-            orig_resize(event)
-            if self._is_tab_visible():
-                self.refresh()
-
-        self.canvas.resizeEvent = on_resize
-        layout.addWidget(NavigationToolbar(self.canvas, self))
-        layout.addWidget(self.canvas, 1)
+            self.canvas.resizeEvent = on_resize
+            layout.addWidget(NavigationToolbar(self.canvas, self))
+            layout.addWidget(self.canvas, 1)
 
         controls = QGroupBox("Map")
         grid = QGridLayout(controls)
@@ -345,8 +362,20 @@ class Map2DTab(QWidget):
         self._slice1d_slider.blockSignals(False)
         self.refresh()
 
+    def _is_tab_visible(self):
+        return is_current_tab(self)
+
+    def _on_resize_settled(self):
+        if self._is_tab_visible():
+            self.refresh()
+
+    def current_slice_index(self):
+        if self._slice_index_getter is None:
+            return 0
+        return self._slice_index_getter()
+
     def _component(self):
-        return self.component.currentData() if hasattr(self, "component") else "zz"
+        return self.component.currentData()
 
     def _on_control_changed(self, *_):
         # Swallows the signal argument, which would otherwise land in *force*
@@ -389,12 +418,7 @@ class Map2DTab(QWidget):
 
         component = self._component()
 
-        # Get slice index from 3D tab if possible, otherwise use 0/middle
-        slice_idx = 0
-        if hasattr(self, "_get_slice_index"):
-            slice_idx = self._get_slice_index()
-
-        info = self.field.plane_slice(component, slice_idx)
+        info = self.field.plane_slice(component, self.current_slice_index())
         values = info["values"]
         self._set_slice1d_bounds(info)
 
@@ -409,8 +433,7 @@ class Map2DTab(QWidget):
             self.vmax.blockSignals(False)
         else:
             span = self.vmax.value()
-        if self._on_range_computed is not None:
-            self._on_range_computed(span)
+        self.range_computed.emit(float(span))
 
         a1_offset = 0.0
         a2_offset = 0.0
@@ -519,18 +542,13 @@ class Map2DTab(QWidget):
             title += f" ({position_label})"
         ax.set_title(title, fontsize=10)
 
-        if hasattr(self, "_set_slice_value_label"):
-            self._set_slice_value_label(
-                "-" if position_label is None else position_label
-            )
-
         self.canvas.draw_idle()
 
     def _draw_slice1d_crosshair(self, ax, info, a1_offset, a2_offset):
         """Draw a dashed line on the map showing where the 1D slice will cut."""
         if not self.field.is_gridded:
             return
-        if not getattr(self, "show_1d_line", None) or not self.show_1d_line.isChecked():
+        if not self.show_1d_line.isChecked():
             return
         fixed_axis = self._slice1d_axis.currentData()
         idx = self._slice1d_slider.value()
@@ -583,11 +601,14 @@ class Map2DTab(QWidget):
             return None
         coords = self.field.layout["coords"][info["order"][2]]
         idx = min(info["slice_index"], len(coords) - 1)
+        # The slice centre, not a corner: a corner can sit nearest to a ring
+        # other than the one the map is centred on.
+        a1, a2 = info["a1"], info["a2"]
         point = (
             self.field.layout["origin"]
             + float(coords[idx]) * info["normal"]
-            + float(self.field.layout["coords"][info["order"][0]][0]) * info["axis1"]
-            + float(self.field.layout["coords"][info["order"][1]][0]) * info["axis2"]
+            + 0.5 * float(a1[0] + a1[-1]) * info["axis1"]
+            + 0.5 * float(a2[0] + a2[-1]) * info["axis2"]
         )
         _, height, _ = nm.nearest_ring(point, rings)
         return height
@@ -601,7 +622,11 @@ class Map2DTab(QWidget):
         rel = coords - origin
         u = (rel @ info["axis1"]) - a1_offset
         v = (rel @ info["axis2"]) - a2_offset
-        w = np.abs(rel @ info["normal"])
+        # Distance from the slice on screen, not from the grid centre: on an
+        # off-centre slice of a volume the molecule must fade, not stay solid.
+        stack_coords = self.field.layout["coords"][info["order"][2]]
+        plane_at = float(stack_coords[min(info["slice_index"], len(stack_coords) - 1)])
+        w = np.abs(rel @ info["normal"] - plane_at)
 
         for i, j in nm.bond_list(self.field.real_symbols, coords):
             # Fade atoms far from the plane so a projected 3D cage stays readable.
@@ -615,12 +640,12 @@ class Map2DTab(QWidget):
         if self._show_in_3d is None:
             return
         try:
-            slice_idx = 0
-            if hasattr(self, "_get_slice_index"):
-                slice_idx = self._get_slice_index()
-            self._show_in_3d(self._component(), slice_idx)
-        except Exception as e:  # the host viewer is out of our control
-            logging.warning("[orca_nics_analyzer] show in 3D: %s", e)
+            self._show_in_3d(self._component(), self.current_slice_index())
+        # Broad on purpose: this is a Qt slot, and an exception escaping one
+        # aborts the whole host application under PyQt6. Whatever the host's
+        # VTK stack raises is reported instead.
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[orca_nics_analyzer] show in 3D: %s", e)
             QMessageBox.warning(self, "3D view", f"Could not draw the plane:\n{e}")
 
     def _emit_slice_to_1d(self):
@@ -633,17 +658,14 @@ class Map2DTab(QWidget):
             )
             return
         try:
-            slice_idx = 0
-            if hasattr(self, "_get_slice_index"):
-                slice_idx = self._get_slice_index()
             data = self.field.extract_line(
                 component=self._component(),
                 fixed_in_plane_axis=self._slice1d_axis.currentData(),
                 fixed_index=self._slice1d_slider.value(),
-                stack_index=slice_idx,
+                stack_index=self.current_slice_index(),
             )
         except (ValueError, IndexError) as e:
-            logging.warning("[orca_nics_analyzer] extract_line: %s", e)
+            logger.warning("[orca_nics_analyzer] extract_line: %s", e)
             QMessageBox.warning(self, "Slice → 1D", f"Could not extract slice:\n{e}")
             return
 
@@ -663,6 +685,7 @@ class Map2DTab(QWidget):
         is destroyed first, the queued draw reaches a deleted canvas and
         raises from inside matplotlib.
         """
+        self._resize_timer.stop()
         if self.canvas is not None:
             self.canvas._draw_pending = False
 
@@ -674,6 +697,9 @@ class Map2DTab(QWidget):
         return f"{base}_NICS_{self._component()}{suffix}"
 
     def export_png(self):
+        if self.figure is None:
+            QMessageBox.information(self, "Save image", "matplotlib is not installed.")
+            return
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Save map image",
@@ -685,7 +711,7 @@ class Map2DTab(QWidget):
         try:
             self.figure.savefig(path, dpi=300)
         except (OSError, ValueError) as e:
-            logging.warning("[orca_nics_analyzer] image export: %s", e)
+            logger.warning("[orca_nics_analyzer] image export: %s", e)
             QMessageBox.critical(
                 self, "Save failed", f"Could not write the image:\n{e}"
             )
@@ -704,10 +730,7 @@ class Map2DTab(QWidget):
         )
         if not path:
             return
-        slice_idx = 0
-        if hasattr(self, "_get_slice_index"):
-            slice_idx = self._get_slice_index()
-        info = self.field.plane_slice(self._component(), slice_idx)
+        info = self.field.plane_slice(self._component(), self.current_slice_index())
         lines = ["axis2\\axis1," + ",".join(f"{a:.4f}" for a in info["a1"])]
         for j, b in enumerate(info["a2"]):
             cells = [
@@ -718,7 +741,7 @@ class Map2DTab(QWidget):
             with open(path, "w", encoding="utf-8", newline="") as fh:
                 fh.write("\n".join(lines) + "\n")
         except OSError as e:
-            logging.warning("[orca_nics_analyzer] grid CSV export: %s", e)
+            logger.warning("[orca_nics_analyzer] grid CSV export: %s", e)
             QMessageBox.critical(
                 self, "Export failed", f"Could not write the file:\n{e}"
             )

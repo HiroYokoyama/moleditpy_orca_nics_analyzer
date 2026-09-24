@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,13 +10,16 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("PyQt6.QtWidgets")
 
-from PyQt6.QtCore import QMimeData, QUrl  # noqa: E402
-from PyQt6.QtWidgets import QPushButton  # noqa: E402
+from PyQt6.QtCore import QMimeData, Qt, QUrl
+from PyQt6.QtWidgets import QPushButton
 
-from orca_nics_analyzer.parser import NicsParser  # noqa: E402
-from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block  # noqa: E402
-from orca_nics_analyzer.icss3d_tab import ACTOR_AXIS_VECTOR  # noqa: E402
-from orca_nics_analyzer.icss3d_tab import ACTOR_NEGATIVE, ACTOR_POSITIVE  # noqa: E402
+from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block
+from orca_nics_analyzer.icss3d_tab import (
+    ACTOR_AXIS_VECTOR,
+    ACTOR_NEGATIVE,
+    ACTOR_POSITIVE,
+)
+from orca_nics_analyzer.parser import NicsParser
 
 pytestmark = pytest.mark.usefixtures("qapp", "no_modals")
 
@@ -42,8 +46,12 @@ def make_dialog(fake_context, request, tmp_path):
         return dialog
 
     yield _make
+    from PyQt6 import sip
+
     for dialog in created:
-        dialog.close()
+        # A closed dialog deletes itself once the event loop runs.
+        if not sip.isdeleted(dialog):
+            dialog.close()
 
 
 def _mime_for_path(path):
@@ -240,11 +248,10 @@ class TestOpening:
         # Bypass the ghost check in load_file by passing parser directly.
         from orca_nics_analyzer.analysis import NicsField
 
-        try:
-            NicsField(parser)
-        except Exception:
-            # no_ghosts_out has no probes — default tab is Probes.
-            pass
+        field = NicsField(parser)
+        if fixture == "no_ghosts_out":
+            # No probes: the dialog would open on the Probes tab.
+            assert field.layout["kind"] == "none"
         dlg = make_dialog(path if fixture != "no_ghosts_out" else None)
         if fixture != "no_ghosts_out":
             assert dlg.tabs.tabText(dlg.tabs.currentIndex()) == tab
@@ -473,37 +480,33 @@ class TestDragAndDrop:
 class TestProbeTable:
     def test_row_per_probe(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
-        assert dialog.probe_tab.table.rowCount() == 125
+        assert dialog.probe_tab.model.rowCount() == 125
 
     def test_columns_match_the_csv(self, make_dialog, single_out):
         dialog = make_dialog(single_out)
-        table = dialog.probe_tab.table
-        assert table.columnCount() == len(dialog.field.CSV_COLUMNS)
+        assert dialog.probe_tab.model.columnCount() == len(dialog.field.CSV_COLUMNS)
 
     def test_values_are_formatted(self, make_dialog, single_out):
         dialog = make_dialog(single_out)
-        table = dialog.probe_tab.table
-        headers = [
-            table.horizontalHeaderItem(c).text() for c in range(table.columnCount())
-        ]
-        column = headers.index("NICS_zz/ppm")
-        assert table.item(0, column).text().replace("-", "").replace(".", "").isdigit()
+        tab = dialog.probe_tab
+        column = tab.HEADERS.index("NICS_zz/ppm")
+        assert tab.cell_text(0, column).replace("-", "").replace(".", "").isdigit()
 
     def test_numeric_columns_sort_by_value(self, make_dialog, volume_out):
         dialog = make_dialog(volume_out)
-        table = dialog.probe_tab.table
-        headers = [
-            table.horizontalHeaderItem(c).text() for c in range(table.columnCount())
-        ]
-        column = headers.index("NICS_zz/ppm")
-        table.sortItems(column)
-        values = [table.item(r, column).value for r in range(table.rowCount())]
+        tab = dialog.probe_tab
+        column = tab.HEADERS.index("NICS_zz/ppm")
+        tab.table.sortByColumn(column, Qt.SortOrder.AscendingOrder)
+        values = [tab.cell_value(r, column) for r in range(tab.model.rowCount())]
         assert values == sorted(values)
 
     def test_colouring_can_be_switched_off(self, make_dialog, single_out):
         dialog = make_dialog(single_out)
         dialog.probe_tab.colour_chk.setChecked(False)
-        assert dialog.probe_tab.table.rowCount() == 3
+        assert dialog.probe_tab.model.rowCount() == 3
+        column = dialog.probe_tab.HEADERS.index("NICS_zz/ppm")
+        index = dialog.probe_tab.proxy.index(0, column)
+        assert index.data(Qt.ItemDataRole.BackgroundRole) is None
 
     def test_copy_csv_reaches_the_clipboard(self, make_dialog, single_out):
         from PyQt6.QtGui import QGuiApplication
@@ -520,7 +523,7 @@ class TestProbeTable:
             return_value=(target, ""),
         ):
             dialog.probe_tab.export_csv()
-        assert len(open(target, encoding="utf-8").read().splitlines()) == 4
+        assert len(Path(target).read_text(encoding="utf-8").splitlines()) == 4
 
     def test_export_csv_cancelled_writes_nothing(
         self, make_dialog, single_out, tmp_path
@@ -566,7 +569,7 @@ class TestScanTab:
             return_value=(target, ""),
         ):
             dialog.scan_tab.export_csv()
-        assert open(target, encoding="utf-8").read().startswith("Index,Distance")
+        assert Path(target).read_text(encoding="utf-8").startswith("Index,Distance")
 
     def test_export_png(self, make_dialog, single_out, tmp_path):
         dialog = make_dialog(single_out)
@@ -667,7 +670,7 @@ class TestMapTab:
             return_value=(target, ""),
         ):
             dialog.map_tab.export_csv()
-        lines = open(target, encoding="utf-8").read().splitlines()
+        lines = Path(target).read_text(encoding="utf-8").splitlines()
         assert len(lines) == 10  # header + 9 rows
         assert lines[0].startswith("axis2\\axis1")
 
@@ -833,14 +836,19 @@ class TestIcssTab:
         dialog = make_dialog(volume_out)
         tab = dialog.icss_tab
         tab.draw = MagicMock()
+        tab.update_cut_axis_preview = MagicMock()
 
         tab.iso_slider.setValue(tab.iso_slider.value() + 1)
         tab.show_positive.setChecked(False)
+        assert tab.draw.call_count == 2
+
+        # The surfaces do not depend on the cut plane or the slice, so those
+        # only move the preview plane instead of rebuilding every surface.
         tab.show_cut_axis.setChecked(True)
         next_slice = min(tab.slice_slider.maximum(), tab.slice_slider.value() + 1)
         tab.slice_slider.setValue(next_slice)
-
-        assert tab.draw.call_count >= 4
+        assert tab.draw.call_count == 2
+        assert tab.update_cut_axis_preview.called
 
     def test_cmap_and_span_uses_internal_compatibility_state(
         self, make_dialog, volume_out
@@ -897,7 +905,7 @@ class TestIcssTab:
             assert big.icss_tab.isovalue.value() > first * 10
         finally:
             big.close()
-        saved = json.loads(open(settings, encoding="utf-8").read())
+        saved = json.loads(Path(settings).read_text(encoding="utf-8"))
         assert "icss_isovalue" not in saved["nics_analyzer_settings"]
 
     def test_isovalue_slider_and_spin_stay_in_sync(self, make_dialog, volume_out):
@@ -915,7 +923,7 @@ class TestIcssTab:
     def test_generates_and_reuses_the_cube(self, make_dialog, volume_out, tmp_path):
         pytest.importorskip("pyvista")
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         dialog = make_dialog(str(source))
 
         # The first 3D render now persists the selected field automatically.
@@ -931,7 +939,7 @@ class TestIcssTab:
     ):
         pytest.importorskip("pyvista")
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         dialog = make_dialog(str(source))
         cube_path = source.parent / "run_nics_cubes" / "run_NICS_zz.cube"
         assert cube_path.exists()
@@ -940,7 +948,7 @@ class TestIcssTab:
     def test_cache_label_tracks_the_file(self, make_dialog, volume_out, tmp_path):
         pytest.importorskip("pyvista")
         source = tmp_path / "run.out"
-        source.write_bytes(open(volume_out, "rb").read())
+        source.write_bytes(Path(volume_out).read_bytes())
         dialog = make_dialog(str(source))
         assert "Cached:" in dialog.icss_tab.cache_label.text()
 
@@ -1215,7 +1223,7 @@ class TestTabSync:
         assert dlg.map_tab.vmax.value() > 20.0  # the computed span
         dlg.close()
 
-        saved = json.loads(open(settings, encoding="utf-8").read())
+        saved = json.loads(Path(settings).read_text(encoding="utf-8"))
         assert saved["nics_analyzer_settings"]["map_range"] == pytest.approx(10.0)
 
     def test_auto_range_reaches_the_3d_plane(self, make_dialog, volume_out):
@@ -1514,14 +1522,15 @@ class TestScan1DSlice:
             return_value=(target, ""),
         ):
             dlg.scan_tab.export_csv()
-        rows = open(target, encoding="utf-8").read().splitlines()[1:]
+        rows = Path(target).read_text(encoding="utf-8").splitlines()[1:]
         first = rows[0].split(",")
         assert float(first[2]) == pytest.approx(float(data["iso"][0]), abs=1e-4)
         assert first[3] == ""
 
     def test_slice_csv_export(self, make_dialog, plane_out, tmp_path):
-        from orca_nics_analyzer.analysis import load_field
         from unittest.mock import patch
+
+        from orca_nics_analyzer.analysis import load_field
 
         dlg = make_dialog(plane_out)
         data = load_field(plane_out).extract_line("iso", 0, 0)
@@ -1532,7 +1541,7 @@ class TestScan1DSlice:
             return_value=(target, ""),
         ):
             dlg.scan_tab.export_csv()
-        lines = open(target, encoding="utf-8").read().splitlines()
+        lines = Path(target).read_text(encoding="utf-8").splitlines()
         assert lines[0].startswith("Index,Distance")
         assert len(lines) > 1
 
@@ -1788,9 +1797,13 @@ class TestMap2DSliceControls:
         dlg = make_dialog(volume_out)
         dlg.tabs.setCurrentWidget(dlg.map_tab)
         dlg.icss_tab.draw = MagicMock()
+        dlg.icss_tab.show_plane = MagicMock()
 
+        # The colour range only colours the mirrored 3D plane; the isosurfaces
+        # do not use it, so the plane is redrawn and the surfaces are not.
         dlg.map_tab.auto_range.setChecked(False)
-        assert dlg.icss_tab.draw.called
+        assert dlg.icss_tab.show_plane.called
+        assert not dlg.icss_tab.draw.called
 
         dlg.icss_tab.draw.reset_mock()
         dlg.map_tab.component.setCurrentIndex(1)
@@ -1801,9 +1814,10 @@ class TestMap2DSliceControls:
         from unittest.mock import MagicMock
 
         dlg = make_dialog(volume_out)
-        dlg.icss_tab._on_slice_settings_changed = MagicMock()
+        listener = MagicMock()
+        dlg.icss_tab.slice_settings_changed.connect(listener)
         dlg.icss_tab.slice_slider.setValue(0)
-        assert dlg.icss_tab._on_slice_settings_changed.called
+        assert listener.called
 
     def test_icss3d_slice_group_structure(self, make_dialog, volume_out):
         from PyQt6.QtWidgets import QGroupBox
@@ -2043,4 +2057,4 @@ class TestMap2DImprovements:
     def test_plugin_version_is_0_5_2(self):
         import orca_nics_analyzer
 
-        assert orca_nics_analyzer.PLUGIN_VERSION == "0.5.2"
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.5.3"

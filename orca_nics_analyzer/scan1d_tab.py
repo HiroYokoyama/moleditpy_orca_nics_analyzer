@@ -10,7 +10,6 @@ import logging
 import os
 
 import numpy as np
-
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -34,6 +33,10 @@ except ImportError:  # matplotlib is an optional dependency
     NavigationToolbar = None
     Figure = None
 
+from .tab_util import is_current_tab
+
+logger = logging.getLogger(__name__)
+
 
 class Scan1DTab(QWidget):
     """NICS(iso) and NICS_zz against distance along the probe line.
@@ -44,9 +47,9 @@ class Scan1DTab(QWidget):
     def __init__(self, field, parent=None):
         super().__init__(parent)
         self.field = field
-        self._is_tab_visible = lambda: True
         self.canvas = None
         self.figure = None
+        self._clear_slice_btn = None
         # When not None, this externally-supplied data dict overrides
         # the native field.line_data() call.
         self._slice_data = None
@@ -135,6 +138,26 @@ class Scan1DTab(QWidget):
             self._clear_slice_btn.setVisible(True)
         self.refresh(force=True)
 
+    def reextract_slice(self):
+        """Cut the displayed slice again from the field's current values.
+
+        The slice dict is a snapshot; after the NICS_zz axis changes its
+        values are stale. Slices that did not come from ``extract_line``
+        carry no parameters to redo the cut with and are left alone.
+        """
+        data = self._slice_data
+        if data is None or data.get("source") != "extract_line":
+            return
+        try:
+            self._slice_data = self.field.extract_line(
+                data["component"],
+                data["fixed_in_plane_axis"],
+                data["fixed_index"],
+                stack_index=data["stack_index"],
+            )
+        except (KeyError, ValueError) as e:
+            logger.warning("[orca_nics_analyzer] re-extract slice: %s", e)
+
     def clear_slice(self):
         """Return to the native probe-layout scan view."""
         self._slice_data = None
@@ -143,6 +166,9 @@ class Scan1DTab(QWidget):
         self.refresh(force=True)
 
     # -- drawing ---------------------------------------------------------
+
+    def _is_tab_visible(self):
+        return is_current_tab(self)
 
     def _on_control_changed(self, *_):
         # Swallows the signal argument, which would otherwise land in *force*
@@ -306,7 +332,7 @@ class Scan1DTab(QWidget):
             with open(path, "w", encoding="utf-8", newline="") as fh:
                 fh.write(content)
         except OSError as e:
-            logging.warning("[orca_nics_analyzer] scan CSV export: %s", e)
+            logger.warning("[orca_nics_analyzer] scan CSV export: %s", e)
             QMessageBox.critical(
                 self, "Export failed", f"Could not write the file:\n{e}"
             )
@@ -323,7 +349,7 @@ class Scan1DTab(QWidget):
         try:
             self.figure.savefig(path, dpi=300)
         except (OSError, ValueError) as e:
-            logging.warning("[orca_nics_analyzer] scan image export: %s", e)
+            logger.warning("[orca_nics_analyzer] scan image export: %s", e)
             QMessageBox.critical(
                 self, "Save failed", f"Could not write the image:\n{e}"
             )
