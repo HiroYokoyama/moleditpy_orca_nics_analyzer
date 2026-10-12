@@ -499,6 +499,12 @@ class Icss3DTab(QWidget):
 
         component = self.component.currentData()
         cube, origin, steps = self.field.grid(component)
+        if not np.isfinite(cube).all():
+            self.status.setText(
+                "Missing probe values; choose a complete component before contouring."
+            )
+            self.clear_actors()
+            return
         if np.count_nonzero(np.isfinite(cube)) < 8:
             if not silent:
                 QMessageBox.information(self, "3D view", "Not enough data to contour.")
@@ -525,7 +531,7 @@ class Icss3DTab(QWidget):
 
         self.clear_actors()
         grid = structured_grid(
-            np.nan_to_num(cube, nan=0.0),
+            cube,
             origin,
             steps,
             points=None if self.field.is_uniform else self.field.grid_points(),
@@ -736,9 +742,11 @@ class Icss3DTab(QWidget):
 
         info = self.field.plane_slice(component, slice_index)
         values = info["values"]
-        smooth, fa1, fa2 = _resample_plane(
-            np.nan_to_num(values, nan=0.0), info["a1"], info["a2"]
-        )
+        if not np.isfinite(values).all():
+            self._remove(plotter, ACTOR_PLANE)
+            self.status.setText("Missing probe values; cannot display this 3D slice.")
+            return
+        smooth, fa1, fa2 = _resample_plane(values, info["a1"], info["a2"])
         i, j = np.meshgrid(np.arange(len(fa1)), np.arange(len(fa2)), indexing="ij")
         base = (
             self.field.layout["origin"]
@@ -810,7 +818,7 @@ class Icss3DTab(QWidget):
                 "a cube (the format holds one step per axis)."
             )
             return
-        cached = self.field.cached_cube(component)
+        cached = self.field.cached_cube(component, plugin_version=self.plugin_version)
         if cached:
             info = cube_io.read_generation_settings(cached)
             grid = "x".join(str(g) for g in info["grid"] or ()) or "unknown grid"

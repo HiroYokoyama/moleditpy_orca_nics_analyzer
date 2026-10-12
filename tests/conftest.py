@@ -11,7 +11,8 @@ import pytest
 # pytest-of-<user>/ into the source tree. Pinned before any tmp_path is made.
 if os.path.abspath(tempfile.gettempdir()) == os.path.abspath(os.getcwd()):
     tempfile.tempdir = os.path.abspath(
-        os.environ.get("RUNNER_TEMP") or os.path.expanduser("~/.cache/moleditpy_orca_nics_analyzer_tests")
+        os.environ.get("RUNNER_TEMP")
+        or os.path.expanduser("~/.cache/moleditpy_orca_nics_analyzer_tests")
     )
     os.makedirs(tempfile.tempdir, exist_ok=True)
 

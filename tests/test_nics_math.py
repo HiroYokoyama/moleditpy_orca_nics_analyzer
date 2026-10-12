@@ -317,3 +317,51 @@ class TestLayoutFallbacks:
 
     def test_no_probes_at_all(self):
         assert nm.detect_layout([])["kind"] == "none"
+
+
+def test_large_layout_uses_reduced_svd(monkeypatch):
+    original = np.linalg.svd
+
+    def svd(points, **kwargs):
+        assert kwargs.get("full_matrices") is False
+        return original(points, **kwargs)
+
+    monkeypatch.setattr(np.linalg, "svd", svd)
+    layout = nm.detect_layout(
+        np.column_stack([np.arange(1000), np.zeros(1000), np.zeros(1000)])
+    )
+    assert layout["kind"] == "line"
+
+
+def test_thin_regular_volume_is_not_mistaken_for_a_plane():
+    points = np.array(
+        [[x, y, z] for x in [-1, 0, 1] for y in [-1, 0, 1] for z in [0, 0.0005, 0.001]]
+    )
+    layout = nm.detect_layout(points)
+    assert layout["kind"] == "volume"
+    assert layout["regular"] and layout["rank"] == 3
+
+
+@pytest.mark.parametrize(
+    "points", [[[0, 0]], [[0, float("nan"), 1]], [[0, 0, float("inf")]]]
+)
+def test_invalid_probe_geometry_is_rejected(points):
+    with pytest.raises(ValueError):
+        nm.detect_layout(points)
+
+
+def test_nonfinite_nics_is_not_classified_as_nonaromatic():
+    assert nm.classify(float("nan")) == "-"
+    assert nm.nics_iso({"iso": float("nan")}) is None
+
+
+def test_projection_is_invariant_to_normal_sign_and_large_axis_scale():
+    entry = {"tensor": [[10, 2, 0], [0, 20, 0], [0, 0, 30]]}
+    assert nm.nics_zz(entry, [0, 0, 1e308]) == pytest.approx(-30)
+    assert nm.nics_zz(entry, [0, 0, -1]) == pytest.approx(-30)
+    assert nm.nics_zz(entry, [0, 0, float("nan")]) is None
+
+
+def test_collinear_ring_plane_is_rejected():
+    with pytest.raises(ValueError):
+        nm.ring_normal([[0, 0, 0], [1, 0, 0], [2, 0, 0]])

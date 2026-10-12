@@ -3,6 +3,7 @@
 import logging
 import os
 
+import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 from PyQt6.QtWidgets import (
@@ -340,9 +341,9 @@ class NicsAnalyzerDialog(QDialog):
         self._load_settings()
         self._select_default_tab()
 
-    def _apply_parser(self, parser):
+    def _apply_parser(self, parser, field=None):
         """Load a parser's data into the dialog, replacing any previous state."""
-        self.field = NicsField(parser)
+        self.field = field if field is not None else NicsField(parser)
 
         name = os.path.basename(parser.filename) if parser.filename else "NICS data"
         self.setWindowTitle(f"ORCA NICS Analyzer — {name}")
@@ -399,8 +400,9 @@ class NicsAnalyzerDialog(QDialog):
         Shuts down any 2D/3D resources from the previous session before
         replacing them.
         """
+        field = NicsField(parser)
         self._shutdown_tabs()
-        self._apply_parser(parser)
+        self._apply_parser(parser, field=field)
 
     def load_file(self, path):
         """Parse *path* and load it into the dialog.
@@ -413,7 +415,11 @@ class NicsAnalyzerDialog(QDialog):
         if parser is None:
             return False
 
-        self.load_parser(parser)
+        try:
+            self.load_parser(parser)
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            QMessageBox.warning(self, "Invalid NICS Data", str(exc))
+            return False
         return True
 
     def open_file_dialog(self):

@@ -604,3 +604,23 @@ class TestExtractLine:
         field = load_field(plane_out)
         data = field.extract_line("iso", 0, 0)
         assert np.all(data["offsets"] == 0.0)
+
+
+def test_cache_rejects_changed_plugin_version(plane_out, tmp_path):
+    field = load_field(plane_out)
+    field.filename = str(tmp_path / "source.out")
+    Path(field.filename).write_text("source", encoding="utf-8")
+    _, cached = field.ensure_cube("iso", plugin_version="0.5.3")
+    assert not cached
+    _, cached = field.ensure_cube("iso", plugin_version="0.6.0")
+    assert not cached
+
+
+def test_cache_rejects_corrupted_scalar_values(plane_out, tmp_path):
+    field = load_field(plane_out)
+    field.filename = str(tmp_path / "source.out")
+    Path(field.filename).write_text("source", encoding="utf-8")
+    path, _ = field.ensure_cube("iso", plugin_version="0.6.0")
+    text = Path(path).read_text(encoding="utf-8")
+    Path(path).write_text(text.rsplit("\n", 2)[0] + "\n", encoding="utf-8")
+    assert field.cached_cube("iso", plugin_version="0.6.0") is None

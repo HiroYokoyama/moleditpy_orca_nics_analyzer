@@ -19,18 +19,21 @@ from .elements import DEFAULT_COVALENT_RADIUS as _DEFAULT_RADIUS
 def symmetrize(tensor):
     """(sigma + sigma^T) / 2.
 
-    ORCA prints the unsymmetrized total shielding tensor. Only the symmetric
-    part is observable, and the antisymmetric part would make the projected
-    ``NICS_zz`` depend on the sign of the chosen normal, so it is dropped
-    before any projection or diagonalization.
+    The antisymmetric part contributes zero to n.T @ sigma @ n. Use the
+    symmetric tensor for projection and real principal-component analysis;
+    reversing the normal leaves the projection unchanged.
     """
     t = np.asarray(tensor, dtype=float)
-    return 0.5 * (t + t.T)
+    if t.shape != (3, 3) or not np.isfinite(t).all():
+        raise ValueError("Shielding tensor must be a finite 3x3 matrix")
+    return 0.5 * t + 0.5 * t.T
 
 
 def isotropic(tensor):
     t = np.asarray(tensor, dtype=float)
-    return float(np.trace(t) / 3.0)
+    if t.shape != (3, 3) or not np.isfinite(t).all():
+        raise ValueError("Shielding tensor must be a finite 3x3 matrix")
+    return float(np.sum(np.diag(t) / 3.0))
 
 
 def nics_iso(entry):
@@ -38,7 +41,8 @@ def nics_iso(entry):
     if entry is None:
         return None
     if entry.get("iso") is not None:
-        return -float(entry["iso"])
+        value = float(entry["iso"])
+        return -value if np.isfinite(value) else None
     if entry.get("tensor") is not None:
         return -isotropic(entry["tensor"])
     return None
@@ -49,10 +53,13 @@ def nics_zz(entry, axis):
     if entry is None or entry.get("tensor") is None or axis is None:
         return None
     n = np.asarray(axis, dtype=float)
-    norm = np.linalg.norm(n)
-    if norm < 1e-12:
+    if n.shape != (3,) or not np.isfinite(n).all():
         return None
-    n = n / norm
+    scale = float(np.max(np.abs(n)))
+    if scale < 1e-12:
+        return None
+    n = n / scale
+    n = n / np.linalg.norm(n)
     return -float(n @ symmetrize(entry["tensor"]) @ n)
 
 
@@ -82,7 +89,7 @@ CLASSIFY_THRESHOLDS = {"iso": 2.0, "zz": 6.0}
 
 def classify(value, component="iso"):
     """Coarse aromaticity label for a NICS value in ppm."""
-    if value is None:
+    if value is None or not np.isfinite(value):
         return "-"
     threshold = CLASSIFY_THRESHOLDS[component]
     if value < -threshold:
@@ -160,8 +167,12 @@ def ring_centroid(positions):
 def ring_normal(positions, reference=None):
     """Best-fit plane normal via SVD, sign-stabilized against *reference*."""
     pos = np.asarray(positions, dtype=float)
+    if pos.ndim != 2 or pos.shape[1] != 3 or len(pos) < 3 or not np.isfinite(pos).all():
+        raise ValueError("Ring coordinates must be finite and define a plane")
     centred = pos - pos.mean(axis=0)
-    _, _, vt = np.linalg.svd(centred)
+    _, singular, vt = np.linalg.svd(centred, full_matrices=False)
+    if singular[1] <= 1e-10 * max(float(singular[0]), 1.0):
+        raise ValueError("Coincident or collinear atoms do not define a ring plane")
     normal = vt[2]
     if reference is not None:
         ref = np.asarray(reference, dtype=float)
@@ -317,12 +328,14 @@ def detect_layout(points, rank_tol=1e-3, cluster_tol=None):
     pts = np.asarray(points, dtype=float)
     if pts.size == 0:
         return {"kind": "none"}
+    if pts.ndim != 2 or pts.shape[1] != 3 or not np.isfinite(pts).all():
+        raise ValueError("Probe coordinates must be a finite Nx3 array")
     if len(pts) == 1:
         return {"kind": "single", "origin": pts[0], "axes": np.eye(3), "shape": (1,)}
 
     origin = pts.mean(axis=0)
     centred = pts - origin
-    _, sv, vt = np.linalg.svd(centred, full_matrices=True)
+    _, sv, vt = np.linalg.svd(centred, full_matrices=len(pts) < 3)
     scale = float(sv[0]) if sv[0] > 0 else 1.0
     rank = int(np.sum(sv > rank_tol * scale))
 
@@ -359,7 +372,10 @@ def detect_layout(points, rank_tol=1e-3, cluster_tol=None):
     regular = int(np.prod(counts)) == len(pts) and len(
         np.unique(index_map, axis=0)
     ) == len(pts)
-    if not regular and kind in ("line", "plane", "volume"):
+    if regular:
+        rank = sum(count > 1 for count in counts)
+        kind = {0: "single", 1: "line", 2: "plane", 3: "volume"}[rank]
+    elif kind in ("line", "plane", "volume"):
         kind = "scattered"
 
     # Maps cope with uneven spacing, but a cube carries one step per axis.

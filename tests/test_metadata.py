@@ -136,4 +136,8 @@ class TestNoHeavyImportsAtModuleLoad:
                 top_level += [a.name.split(".")[0] for a in node.names]
             elif isinstance(node, ast.ImportFrom) and node.module:
                 top_level.append(node.module.split(".")[0])
-        assert set(top_level) <= {"logging", "os"}
+        assert set(top_level) <= {"logging", "os", "parser"}
+        # The parser and its element constants use only the standard library.
+        from orca_nics_analyzer import parser
+
+        assert "numpy" not in parser.__dict__

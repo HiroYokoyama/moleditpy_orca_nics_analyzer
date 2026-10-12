@@ -233,3 +233,48 @@ class TestRuleDetection:
     @pytest.mark.parametrize("line", ["", "   ", "  0  C  1.0", "- 1.0"])
     def test_not_rules(self, line):
         assert not _is_rule(line)
+
+
+def test_last_summary_cannot_reuse_an_older_tensor():
+    geometry = "CARTESIAN COORDINATES (ANGSTROEM)\n---\nH: 0 0 1\n\n"
+    tensor = "Nucleus 0H :\nTotal shielding tensor (ppm):\n1 0 0\n0 2 0\n0 0 3\n\n"
+
+    def summary(value):
+        return f"CHEMICAL SHIELDING SUMMARY (ppm)\n---\nNucleus Element Isotropic Anisotropy\n---\n0 H {value} 1\n\n\n"
+
+    data = NicsParser().load_from_memory(geometry + tensor + summary(2) + summary(9))
+    assert data["shieldings"][0]["iso"] == 9
+    assert data["shieldings"][0]["tensor"] is None
+    assert not data["has_tensors"]
+
+
+def test_new_geometry_cannot_reuse_an_older_shielding_section():
+    geometry = "CARTESIAN COORDINATES (ANGSTROEM)\n---\nH: 0 0 {z}\n\n"
+    summary = "CHEMICAL SHIELDING SUMMARY (ppm)\n---\nNucleus Element Isotropic Anisotropy\n---\n0 H 9 1\n\n\n"
+    data = NicsParser().load_from_memory(
+        geometry.format(z=1) + summary + geometry.format(z=2)
+    )
+    assert data["atoms"][0]["xyz"][2] == 2
+    assert data["shieldings"] == {}
+    assert data["probe_indices"] == []
+
+
+def test_fortran_geometry_exponents_are_supported():
+    text = "CARTESIAN COORDINATES (ANGSTROEM)\n---\nH: 0D0 0d0 1D0\n\n"
+    assert NicsParser().load_from_memory(text)["atoms"][0]["xyz"] == (0, 0, 1)
+
+
+def test_nonfinite_geometry_is_rejected():
+    text = "CARTESIAN COORDINATES (ANGSTROEM)\n---\nH: 0 0 1e999\n\n"
+    with pytest.raises(ValueError, match="finite"):
+        NicsParser().load_from_memory(text)
+
+
+def test_output_size_is_checked_before_reading(tmp_path, monkeypatch):
+    import orca_nics_analyzer.parser as parser_module
+
+    path = tmp_path / "big.out"
+    path.write_text("123456789", encoding="utf-8")
+    monkeypatch.setattr(parser_module, "MAX_OUTPUT_BYTES", 8)
+    with pytest.raises(ValueError, match="size"):
+        NicsParser().load(path)

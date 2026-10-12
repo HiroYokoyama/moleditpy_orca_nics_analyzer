@@ -66,10 +66,10 @@ class TestRoundTrip:
         )
         assert cube_io.read_cube(path)["symbols"] == ["H"]
 
-    def test_nan_is_written_as_zero(self, tmp_path):
+    def test_missing_values_are_rejected(self, tmp_path):
         data = np.array([[[np.nan, 1.0]]])
-        path = cube_io.write_cube(str(tmp_path / "a.cube"), data, [0, 0, 0], np.eye(3))
-        assert cube_io.read_cube(path)["data"][0, 0, 0] == 0.0
+        with pytest.raises(ValueError, match="missing data"):
+            cube_io.write_cube(str(tmp_path / "a.cube"), data, [0, 0, 0], np.eye(3))
 
     def test_directory_is_created(self, tmp_path):
         path = str(tmp_path / "deep" / "nested" / "a.cube")
@@ -199,3 +199,85 @@ class TestPaths:
     def test_no_source_file(self):
         assert cube_io.cube_dir_for(None) is None
         assert cube_io.cube_path_for(None, "zz") is None
+
+
+def _scalar_cube(
+    path, origin="0 0 0 0", axes=("1 1 0 0", "1 0 1 0", "1 0 0 1"), data="1"
+):
+    path.write_text(
+        "comment\nstamp\n" + origin + "\n" + "\n".join(axes) + "\n" + data + "\n",
+        encoding="utf-8",
+    )
+    return str(path)
+
+
+@pytest.mark.parametrize("data", ["nan", "inf", "1 2"])
+def test_invalid_or_extra_cube_values_are_rejected(tmp_path, data):
+    with pytest.raises(ValueError):
+        cube_io.read_cube(_scalar_cube(tmp_path / "bad.cube", data=data))
+
+
+def test_fortran_cube_values_are_supported(tmp_path):
+    path = _scalar_cube(tmp_path / "d.cube", data="1D+01")
+    assert cube_io.read_cube(path)["data"][0, 0, 0] == 10
+
+
+@pytest.mark.parametrize(
+    "origin, axes",
+    [
+        ("0 0 0 0 2", ("1 1 0 0", "1 0 1 0", "1 0 0 1")),
+        ("0 0 0 0", ("0 1 0 0", "1 0 1 0", "1 0 0 1")),
+        ("0 0 0 0", ("-1 1 0 0", "1 0 1 0", "1 0 0 1")),
+        ("0 0 0 0", ("1 1 0 0", "1 1 0 0", "1 0 0 1")),
+    ],
+)
+def test_invalid_cube_headers_are_rejected(tmp_path, origin, axes):
+    with pytest.raises(ValueError):
+        cube_io.read_cube(_scalar_cube(tmp_path / "bad.cube", origin, axes))
+
+
+def test_dataset_ids_can_span_lines(tmp_path):
+    path = tmp_path / "mo.cube"
+    _scalar_cube(path, origin="-1 0 0 0", data="1 0 0 0 0\n1\n4\n2")
+    assert cube_io.read_cube(str(path))["data"][0, 0, 0] == 2
+
+
+def test_multiple_datasets_are_rejected(tmp_path):
+    path = tmp_path / "multi.cube"
+    _scalar_cube(path, origin="-1 0 0 0", data="1 0 0 0 0\n2 1 2\n10 20")
+    with pytest.raises(ValueError, match="Multi-field"):
+        cube_io.read_cube(str(path))
+
+
+def test_failed_cube_replace_preserves_existing_file(tmp_path, monkeypatch):
+    path = tmp_path / "old.cube"
+    path.write_bytes(b"old content")
+
+    def fail(*args):
+        raise OSError("disk failure")
+
+    monkeypatch.setattr(cube_io.os, "replace", fail)
+    with pytest.raises(OSError):
+        cube_io.write_cube(str(path), np.ones((1, 1, 1)), [0, 0, 0], np.eye(3))
+    assert path.read_bytes() == b"old content"
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_atom_metadata_lengths_must_match(tmp_path):
+    with pytest.raises(ValueError):
+        cube_io.write_cube(
+            str(tmp_path / "bad.cube"),
+            np.ones((1, 1, 1)),
+            [0, 0, 0],
+            np.eye(3),
+            symbols=["C"],
+            coords=[],
+        )
+
+
+def test_filename_spaces_survive_cube_stamps(tmp_path):
+    stamp = cube_io.stamp_line("0.6.0", "iso", (1, 1, 1), source="source file.out")
+    path = cube_io.write_cube(
+        str(tmp_path / "s.cube"), np.ones((1, 1, 1)), [0, 0, 0], np.eye(3), stamp=stamp
+    )
+    assert cube_io.read_generation_settings(path)["source_name"] == "source file.out"

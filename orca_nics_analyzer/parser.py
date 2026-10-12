@@ -6,6 +6,8 @@ it, the full 3x3 tensor that ``NICS_zz`` is projected out of).
 """
 
 import logging
+import math
+import os
 import re
 
 from .elements import BOHR_IN_ANGSTROM
@@ -17,11 +19,11 @@ _NUCLEUS_RE = re.compile(r"^\s*Nucleus\s+(\d+)\s*([A-Za-z][A-Za-z0-9]*)\s*:?\s*$
 # "   0 C     6.0000    0    12.011    1.522993   -2.161091   -0.015611"
 _AU_ROW_RE = re.compile(
     r"^\s*(\d+)\s+(\S+)\s+([-+0-9.]+)\s+(\d+)\s+([-+0-9.]+)"
-    r"\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*$"
+    r"\s+([-+0-9.eEdD]+)\s+([-+0-9.eEdD]+)\s+([-+0-9.eEdD]+)\s*$"
 )
 # "  H:     0.805933   -1.143600   -0.008261"
 _ANG_ROW_RE = re.compile(
-    r"^\s*([A-Za-z]{1,2}\s*:?)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*$"
+    r"^\s*([A-Za-z]{1,2}\s*:?)\s+([-+0-9.eEdD]+)\s+([-+0-9.eEdD]+)\s+([-+0-9.eEdD]+)\s*$"
 )
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][-+]?\d+)?"
 _TENSOR_ROW_RE = re.compile(rf"^\s*({_NUMBER})\s+({_NUMBER})\s+({_NUMBER})\s*$")
@@ -29,7 +31,10 @@ _TENSOR_ROW_RE = re.compile(rf"^\s*({_NUMBER})\s+({_NUMBER})\s+({_NUMBER})\s*$")
 
 def _as_float(value):
     """Parse Fortran-style exponents as well as normal floats."""
-    return float(value.replace("D", "E").replace("d", "e"))
+    result = float(value.replace("D", "E").replace("d", "e"))
+    if not math.isfinite(result):
+        raise ValueError("ORCA numeric values must be finite")
+    return result
 
 
 def _blank(line):
@@ -42,6 +47,9 @@ def _is_rule(line):
     all-dashes test fail."""
     stripped = line.strip()
     return bool(stripped) and set(stripped.replace(" ", "")) <= {"-"}
+
+
+MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 
 
 class NicsParser:
@@ -64,20 +72,44 @@ class NicsParser:
 
     # -- entry points ----------------------------------------------------
     def load(self, path):
+        if os.path.getsize(path) > MAX_OUTPUT_BYTES:
+            raise ValueError("ORCA output exceeds the supported 256 MiB size")
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
-            self.load_from_memory(fh.read(), path)
+            self.load_from_memory(fh.read(MAX_OUTPUT_BYTES + 1), path)
         return self.data
 
     def load_from_memory(self, content, path=None):
         if not isinstance(content, str):
             raise TypeError("ORCA output content must be text")
+        if len(content) > MAX_OUTPUT_BYTES:
+            raise ValueError("ORCA output exceeds the supported 256 MiB size")
         self.filename = path
         self.data = self._empty()
         lines = content.splitlines()
         self._parse_version(lines)
         self._parse_geometry(lines)
-        self._parse_shielding_summary(lines)
-        self._parse_tensors(lines)
+        # Last property calculation wins, as in ORCA Result Analyzer. Scope
+        # tensors to that calculation too, so old tensors cannot fill new gaps.
+        geometries = [
+            i for i, line in enumerate(lines) if "CARTESIAN COORDINATES (" in line
+        ]
+        summaries = [
+            i
+            for i, line in enumerate(lines)
+            if "CHEMICAL SHIELDING SUMMARY" in line.upper()
+        ]
+        properties = [
+            i
+            for i, line in enumerate(lines)
+            if re.search(r"CHEMICAL SHIELDING\s*\(PPM\)", line.upper())
+        ]
+        start = max(
+            geometries[-1] if geometries else 0,
+            summaries[-2] + 1 if len(summaries) > 1 else 0,
+            properties[-1] if properties else 0,
+        )
+        self._parse_shielding_summary(lines[start:])
+        self._parse_tensors(lines[start:])
         self._finalize()
         return self.data
 
@@ -177,7 +209,14 @@ class NicsParser:
                 break
             label = m.group(1).replace(" ", "")
             rows.append(
-                (label, (float(m.group(2)), float(m.group(3)), float(m.group(4))))
+                (
+                    label,
+                    (
+                        _as_float(m.group(2)),
+                        _as_float(m.group(3)),
+                        _as_float(m.group(4)),
+                    ),
+                )
             )
             i += 1
         return rows
@@ -199,8 +238,12 @@ class NicsParser:
                 (
                     int(m.group(1)),
                     m.group(2),
-                    float(m.group(3)),
-                    (float(m.group(6)), float(m.group(7)), float(m.group(8))),
+                    _as_float(m.group(3)),
+                    (
+                        _as_float(m.group(6)),
+                        _as_float(m.group(7)),
+                        _as_float(m.group(8)),
+                    ),
                 )
             )
             i += 1

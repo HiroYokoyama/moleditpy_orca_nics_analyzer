@@ -24,6 +24,49 @@ from orca_nics_analyzer.parser import NicsParser
 pytestmark = pytest.mark.usefixtures("qapp", "no_modals")
 
 
+def test_invalid_reload_preserves_existing_field(make_dialog, volume_out, monkeypatch):
+    dialog = make_dialog(volume_out)
+    original = dialog.field
+    shutdown = MagicMock()
+    monkeypatch.setattr(dialog, "_shutdown_tabs", shutdown)
+    with patch(
+        "orca_nics_analyzer.gui.NicsField", side_effect=ValueError("bad geometry")
+    ):
+        assert not dialog.load_file(volume_out)
+    assert dialog.field is original
+    shutdown.assert_not_called()
+
+
+def test_missing_slice_values_are_not_replaced_with_zero(
+    make_dialog, volume_out, fake_plotter, monkeypatch
+):
+    pytest.importorskip("pyvista")
+    dialog = make_dialog(volume_out)
+    info = dialog.field.plane_slice("iso", 0)
+    info["values"] = info["values"].copy()
+    info["values"][0, 0] = np.nan
+    monkeypatch.setattr(dialog.field, "plane_slice", lambda *_: info)
+    fake_plotter.reset_mock()
+    dialog.icss_tab.show_plane("iso", 0)
+    fake_plotter.add_mesh.assert_not_called()
+    assert "Missing probe" in dialog.icss_tab.status.text()
+
+
+def test_missing_volume_values_do_not_create_contours(
+    make_dialog, volume_out, fake_plotter, monkeypatch
+):
+    pytest.importorskip("pyvista")
+    dialog = make_dialog(volume_out)
+    cube, origin, steps = dialog.field.grid("iso")
+    cube = cube.copy()
+    cube.flat[0] = np.nan
+    monkeypatch.setattr(dialog.field, "grid", lambda *_: (cube, origin, steps))
+    fake_plotter.reset_mock()
+    dialog.icss_tab.draw(force=True)
+    fake_plotter.add_mesh.assert_not_called()
+    assert "Missing probe" in dialog.icss_tab.status.text()
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -2054,7 +2097,7 @@ class TestMap2DImprovements:
         assert ax.get_xlim() == (-2.5, 3.5)
         assert ax.get_ylim() == (1.0, 6.0)
 
-    def test_plugin_version_is_0_5_2(self):
+    def test_plugin_version_is_0_6_0(self):
         import orca_nics_analyzer
 
-        assert orca_nics_analyzer.PLUGIN_VERSION == "0.5.3"
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.6.0"

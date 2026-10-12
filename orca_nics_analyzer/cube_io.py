@@ -9,8 +9,11 @@ back: rebuilding the field from the parsed output is cheaper than parsing one.
 """
 
 import logging
+import math
 import os
 import re
+import tempfile
+from urllib.parse import quote, unquote
 
 try:
     import numpy as np
@@ -64,7 +67,7 @@ def stamp_line(version, component, shape, axis=None, source=None, axis_mode=None
     if axis_mode is not None:
         parts.append(f"axis_mode={axis_mode}")
     if source:
-        parts.append(f"source={os.path.basename(source)}")
+        parts.append(f"source={quote(os.path.basename(source), safe='')}")
         try:
             stat = os.stat(source)
             parts.append(f"source_size={stat.st_size}")
@@ -111,7 +114,7 @@ def read_generation_settings(filepath):
         info["axis_mode"] = m.group(1)
     m = re.search(r"source=(\S+)", stamp)
     if m:
-        info["source_name"] = m.group(1)
+        info["source_name"] = unquote(m.group(1))
     m = re.search(r"source_size=(\d+)", stamp)
     if m:
         info["source_size"] = int(m.group(1))
@@ -119,6 +122,27 @@ def read_generation_settings(filepath):
     if m:
         info["source_mtime_ns"] = int(m.group(1))
     return info
+
+
+MAX_CUBE_BYTES = 256 * 1024 * 1024
+MAX_CUBE_VALUES = 16_000_000
+MAX_CUBE_ATOMS = 200_000
+
+
+def _finite_number(text):
+    value = float(text.replace("D", "E").replace("d", "e"))
+    if not math.isfinite(value):
+        raise ValueError("Cube values and coordinates must be finite")
+    return value
+
+
+def _validate_grid(origin, vectors):
+    if origin.shape != (3,) or vectors.shape != (3, 3):
+        raise ValueError("Cube origin and vectors must have shapes (3,) and (3,3)")
+    if not np.isfinite(origin).all() or not np.isfinite(vectors).all():
+        raise ValueError("Cube geometry must be finite")
+    if np.linalg.matrix_rank(vectors) != 3:
+        raise ValueError("Cube voxel vectors must be independent")
 
 
 def write_cube(
@@ -141,12 +165,27 @@ def write_cube(
     if arr.ndim != 3:
         raise ValueError(f"cube data must be 3D, got shape {arr.shape}")
 
+    if any(n <= 0 for n in arr.shape) or arr.size > MAX_CUBE_VALUES:
+        raise ValueError("Unsupported cube grid size")
+    if not np.isfinite(arr).all():
+        raise ValueError(
+            "Cube fields must contain finite values; missing data cannot be replaced with zero"
+        )
+    org = np.asarray(origin, dtype=float) * BOHR_PER_ANGSTROM
+    vecs = np.asarray(vectors, dtype=float) * BOHR_PER_ANGSTROM
+    _validate_grid(org, vecs)
+    symbols, coords = list(symbols), list(coords)
+    if len(symbols) != len(coords) or len(symbols) > MAX_CUBE_ATOMS:
+        raise ValueError("Cube atom symbols and coordinates must match")
+    atom_coords = np.asarray(coords, dtype=float).reshape(-1, 3)
+    if len(atom_coords) != len(symbols) or not np.isfinite(atom_coords).all():
+        raise ValueError("Cube atom coordinates must be finite 3-vectors")
+    if any(ch in str(comment) + str(stamp) for ch in "\r\n"):
+        raise ValueError("Cube comments must each be one line")
     folder = os.path.dirname(path)
     if folder:
         os.makedirs(folder, exist_ok=True)
 
-    org = np.asarray(origin, dtype=float) * BOHR_PER_ANGSTROM
-    vecs = np.asarray(vectors, dtype=float) * BOHR_PER_ANGSTROM
     atoms = list(zip(symbols, coords))
 
     lines = [comment, stamp or f"{CUBE_HEADER_PREFIX}: generated field"]
@@ -159,12 +198,21 @@ def write_cube(
         lines.append(f"{z:5d}{float(z):12.6f}{p[0]:12.6f}{p[1]:12.6f}{p[2]:12.6f}")
 
     # Gaussian's data order: x slowest, z fastest, six values per line.
-    flat = np.nan_to_num(arr, nan=0.0).ravel(order="C")
+    flat = arr.ravel(order="C")
     for start in range(0, flat.size, 6):
         lines.append("".join(f"{v:13.5E}" for v in flat[start : start + 6]))
 
-    with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write("\n".join(lines) + "\n")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="\n", dir=folder or ".", delete=False
+        ) as fh:
+            temporary = fh.name
+            fh.write("\n".join(lines) + "\n")
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None and os.path.exists(temporary):
+            os.unlink(temporary)
     return path
 
 
@@ -174,60 +222,81 @@ def read_cube(path):
     Returns ``{data, origin, vectors, symbols, coords, comment, stamp}`` with
     lengths back in Angstrom.
     """
+    if os.path.getsize(path) > MAX_CUBE_BYTES:
+        raise ValueError("Cube file exceeds the supported 256 MiB size")
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
-        text = fh.read()
+        text = fh.read(MAX_CUBE_BYTES + 1)
+    if len(text) > MAX_CUBE_BYTES:
+        raise ValueError("Cube file exceeds the supported 256 MiB size")
     tokens = text.splitlines()
     if len(tokens) < 6:
         raise ValueError(f"cube {os.path.basename(path)} has an incomplete header")
     comment, stamp = tokens[0], tokens[1]
-
     header = tokens[2].split()
-    if len(header) < 4:
-        raise ValueError(f"cube {os.path.basename(path)} has an invalid origin header")
+    if len(header) not in (4, 5):
+        raise ValueError("Cube has an invalid origin header")
     natoms = int(header[0])
-    origin = np.array([float(v) for v in header[1:4]])
-    # A negative atom count marks an orbital cube: the counts stay positive and
-    # an extra DSET_IDS line follows the atom block.
     has_dset = natoms < 0
     natoms = abs(natoms)
-
-    shape = []
-    vectors = []
-    # A negative voxel count means that axis' vector (and, by convention, the
-    # whole header) is already in Angstrom rather than Bohr.
-    header_in_angstrom = False
+    if natoms > MAX_CUBE_ATOMS or len(tokens) < 6 + natoms:
+        raise ValueError("Cube has an invalid or incomplete atom block")
+    if len(header) == 5 and int(header[4]) != 1:
+        raise ValueError("Multi-field cubes are not supported")
+    origin = np.array([_finite_number(v) for v in header[1:4]])
+    shape, vectors, signs = [], [], []
     for row in tokens[3:6]:
         parts = row.split()
+        if len(parts) != 4:
+            raise ValueError("Cube has an invalid voxel header")
         count = int(parts[0])
-        header_in_angstrom = header_in_angstrom or count < 0
+        if count == 0:
+            raise ValueError("Cube voxel counts must be nonzero")
         shape.append(abs(count))
-        vectors.append([float(v) for v in parts[1:4]])
-
+        signs.append(count < 0)
+        vectors.append([_finite_number(v) for v in parts[1:4]])
+    total = math.prod(shape)
+    if total > MAX_CUBE_VALUES:
+        raise ValueError("Cube grid exceeds the supported value count")
+    if any(signs) and not all(signs):
+        raise ValueError("Cube voxel units must be consistent across all axes")
+    vectors = np.asarray(vectors)
+    _validate_grid(origin, vectors)
     symbols, coords = [], []
     inv = {v: k for k, v in ATOMIC_NUMBERS.items()}
     for row in tokens[6 : 6 + natoms]:
         parts = row.split()
+        if len(parts) != 5:
+            raise ValueError("Cube has an invalid atom row")
         z = int(parts[0])
+        _finite_number(parts[1])
         symbols.append(inv.get(z, "X"))
-        coords.append([float(v) for v in parts[2:5]])
+        coords.append([_finite_number(v) for v in parts[2:5]])
+    rest = (v for row in tokens[6 + natoms :] for v in row.split())
+    if has_dset:
+        try:
+            datasets = int(next(rest))
+            if datasets != 1:
+                raise ValueError("Multi-field cubes are not supported")
+            int(next(rest))
+        except StopIteration as exc:
+            raise ValueError("Cube dataset identifiers are incomplete") from exc
 
-    rest = tokens[6 + natoms :]
-    if has_dset and rest:
-        rest = rest[1:]
-    values = np.array([float(v) for row in rest for v in row.split()])
-    total = int(np.prod(shape))
-    if values.size < total:
-        raise ValueError(
-            f"cube {os.path.basename(path)} has {values.size} values, expected {total}"
-        )
+    def values():
+        for i, token in enumerate(rest):
+            if i >= total:
+                raise ValueError("Cube contains more values than expected")
+            yield _finite_number(token)
 
-    ang = 1.0 if header_in_angstrom else 1.0 / BOHR_PER_ANGSTROM
+    data = np.fromiter(values(), dtype=float)
+    if data.size != total:
+        raise ValueError(f"cube has {data.size} values, expected {total}")
+    ang = 1.0 if all(signs) else 1.0 / BOHR_PER_ANGSTROM
     return {
         "comment": comment,
         "stamp": stamp,
-        "data": values[:total].reshape(shape),
+        "data": data.reshape(shape),
         "origin": origin * ang,
-        "vectors": np.array(vectors) * ang,
+        "vectors": vectors * ang,
         "symbols": symbols,
         "coords": np.array(coords) * ang if coords else np.zeros((0, 3)),
     }

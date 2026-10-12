@@ -513,7 +513,7 @@ class NicsField:
             return None
         return self.axis_for(self.probes[0])
 
-    def cached_cube(self, component, tag=None):
+    def cached_cube(self, component, tag=None, plugin_version=None):
         """The cached cube for *component* if one is on disk and still matches."""
         path = self.cube_path(component, tag)
         if not path or not os.path.exists(path):
@@ -521,6 +521,8 @@ class NicsField:
         if self.is_gridded and not self.is_uniform:
             return None
         info = cube_io.read_generation_settings(path)
+        if plugin_version is not None and info.get("version") != plugin_version:
+            return None
         if info.get("component") and info["component"] != component:
             return None
         if self.filename and info.get("version"):
@@ -565,12 +567,28 @@ class NicsField:
                         return None
                 elif saved_axis is not None or expected_axis is not None:
                     return None
+        try:
+            stored = cube_io.read_cube(path)
+            expected_values, expected_origin, expected_vectors = self.grid(component)
+            if (
+                stored["data"].shape != expected_values.shape
+                or not np.allclose(
+                    stored["data"], expected_values, rtol=1e-5, atol=1e-8
+                )
+                or not np.allclose(stored["origin"], expected_origin, rtol=0, atol=1e-6)
+                or not np.allclose(
+                    stored["vectors"], expected_vectors, rtol=0, atol=1e-6
+                )
+            ):
+                return None
+        except (OSError, ValueError):
+            return None
         return path
 
     def ensure_cube(self, component, plugin_version="0.0.0", tag=None, force=False):
         """Reuse the cached cube, or write it. Returns (path, was_cached)."""
         if not force:
-            cached = self.cached_cube(component, tag)
+            cached = self.cached_cube(component, tag, plugin_version=plugin_version)
             if cached:
                 return cached, True
         return self.write_cube(component, plugin_version=plugin_version, tag=tag), False
