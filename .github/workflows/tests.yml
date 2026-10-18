@@ -15,7 +15,7 @@ env:
 
 jobs:
   # -------------------------------------------------------------------------
-  # Full suite, with the real PyQt6 / matplotlib / pyvista stack so the GUI
+  # Full suite, with the real PySide6-Essentials / matplotlib / pyvista stack so the GUI
   # and the isosurface code are genuinely exercised rather than mocked.
   # -------------------------------------------------------------------------
   test:
@@ -42,7 +42,7 @@ jobs:
             libxcb-xinerama0 libxrender1
 
       - name: Install dependencies
-        run: pip install pytest pytest-cov numpy matplotlib PyQt6 pyvista
+        run: pip install pytest pytest-cov numpy matplotlib PySide6-Essentials pyvista
 
       - name: Run tests with coverage
         run: python -m pytest tests/ -v --tb=short --cov=orca_nics_analyzer --cov-report=term-missing
@@ -93,7 +93,7 @@ jobs:
       # plugin root, so a clone inside it would check the app against itself.
       - name: Clone main MoleditPy application
         run: |
-          git clone --depth 1 \
+          git clone --depth 1 --branch "${{ vars.MOLEDITPY_REF || 'migrate/pyside6-without-openbabel' }}" \
             https://github.com/HiroYokoyama/python_molecular_editor.git \
             ../python_molecular_editor
 

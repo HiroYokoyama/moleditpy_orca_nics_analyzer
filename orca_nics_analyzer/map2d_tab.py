@@ -9,8 +9,8 @@ import logging
 import os
 
 import numpy as np
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -126,7 +126,7 @@ class Map2DTab(QWidget):
 
     #: The +/- ppm range each redraw used. An auto range is written into the
     #: spin box with signals blocked, so this is how the 3D plane learns it.
-    range_computed = pyqtSignal(float)
+    range_computed = Signal(float)
 
     def __init__(
         self,
@@ -642,7 +642,7 @@ class Map2DTab(QWidget):
         try:
             self._show_in_3d(self._component(), self.current_slice_index())
         # Broad on purpose: this is a Qt slot, and an exception escaping one
-        # aborts the whole host application under PyQt6. Whatever the host's
+        # aborts the whole host application under PySide6. Whatever the host's
         # VTK stack raises is reported instead.
         except Exception as e:  # noqa: BLE001
             logger.warning("[orca_nics_analyzer] show in 3D: %s", e)

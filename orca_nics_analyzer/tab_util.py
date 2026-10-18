@@ -1,6 +1,6 @@
 """Helpers shared by the analyzer's tab widgets."""
 
-from PyQt6.QtWidgets import QTabWidget
+from PySide6.QtWidgets import QTabWidget
 
 
 def is_current_tab(widget):

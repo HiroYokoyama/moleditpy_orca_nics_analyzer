@@ -9,7 +9,7 @@ This repository is a MoleditPy plugin for parsing ORCA NICS output, analysing pr
 Install the complete test stack in a virtual environment:
 
 ```bash
-python -m pip install pytest pytest-cov numpy matplotlib PyQt6 pyvista
+python -m pip install pytest pytest-cov numpy matplotlib PySide6 pyvista
 ```
 
 The dependency-free tests need only `pytest` and `numpy`.

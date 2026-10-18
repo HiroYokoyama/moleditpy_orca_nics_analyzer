@@ -180,27 +180,27 @@ class TestCubeCacheRejection:
 
 class TestEntryPointFailures:
     def test_an_unreadable_file_warns_and_returns_none(self, tmp_path):
-        pytest.importorskip("PyQt6.QtWidgets")
+        pytest.importorskip("PySide6.QtWidgets")
         from orca_nics_analyzer import _read_output_file
 
         missing = str(tmp_path / "nope.out")
-        with patch("PyQt6.QtWidgets.QMessageBox.critical") as critical:
+        with patch("PySide6.QtWidgets.QMessageBox.critical") as critical:
             assert _read_output_file(missing, None) is None
         assert critical.called
 
     def test_a_directory_is_not_mistaken_for_an_output(self, tmp_path):
-        pytest.importorskip("PyQt6.QtWidgets")
+        pytest.importorskip("PySide6.QtWidgets")
         from orca_nics_analyzer import _read_output_file
 
-        with patch("PyQt6.QtWidgets.QMessageBox.critical") as critical:
+        with patch("PySide6.QtWidgets.QMessageBox.critical") as critical:
             assert _read_output_file(str(tmp_path), None) is None
         assert critical.called
 
     def test_ghosts_without_shieldings_warn(self):
-        pytest.importorskip("PyQt6.QtWidgets")
+        pytest.importorskip("PySide6.QtWidgets")
         from orca_nics_analyzer import _warn_missing_shieldings
 
-        with patch("PyQt6.QtWidgets.QMessageBox.warning") as warning:
+        with patch("PySide6.QtWidgets.QMessageBox.warning") as warning:
             _warn_missing_shieldings(None)
         assert warning.called
         assert "shielding" in warning.call_args.args[2].lower()

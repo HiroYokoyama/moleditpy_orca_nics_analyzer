@@ -41,7 +41,7 @@ class TestMetadata:
             assert name in plugin.PLUGIN_DEPENDENCIES
 
     def test_supported_host_range(self):
-        assert plugin.PLUGIN_SUPPORTED_MOLEDITPY_VERSION == ">=4.0.0, <5.0.0"
+        assert plugin.PLUGIN_SUPPORTED_MOLEDITPY_VERSION == ">=5.0.0a1, <6.0.0"
 
     def test_entry_point_exists(self):
         assert callable(plugin.initialize)

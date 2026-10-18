@@ -4,9 +4,9 @@ import logging
 import os
 
 import numpy as np
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,

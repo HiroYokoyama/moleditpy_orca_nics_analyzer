@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 
 np = pytest.importorskip("numpy")
-pytest.importorskip("PyQt6.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 from orca_nics_analyzer.analysis import load_field
 from orca_nics_analyzer.gui import NicsAnalyzerDialog
