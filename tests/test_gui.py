@@ -2100,4 +2100,4 @@ class TestMap2DImprovements:
     def test_plugin_version_is_0_6_0(self):
         import orca_nics_analyzer
 
-        assert orca_nics_analyzer.PLUGIN_VERSION == "1.0.0a1"
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.7.0a1"
