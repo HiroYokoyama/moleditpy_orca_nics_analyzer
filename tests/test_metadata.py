@@ -29,7 +29,8 @@ class TestMetadata:
         assert getattr(plugin, name, None) not in (None, "")
 
     def test_version_is_semver(self):
-        assert re.fullmatch(r"\d+\.\d+\.\d+", plugin.PLUGIN_VERSION)
+        from packaging.version import Version
+        assert Version(plugin.PLUGIN_VERSION).public == plugin.PLUGIN_VERSION
 
     def test_tags_and_dependencies_are_lists_of_strings(self):
         for value in (plugin.PLUGIN_TAGS, plugin.PLUGIN_DEPENDENCIES):

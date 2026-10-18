@@ -18,7 +18,7 @@ from .parser import MAX_OUTPUT_BYTES
 logger = logging.getLogger(__name__)
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.6.0"
+PLUGIN_VERSION = "1.0.0a1"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
