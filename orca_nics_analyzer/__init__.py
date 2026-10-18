@@ -27,7 +27,7 @@ PLUGIN_DESCRIPTION = (
 PLUGIN_CATEGORY = "Analysis"
 PLUGIN_TAGS = ["Analysis", "Visualization"]
 PLUGIN_DEPENDENCIES = ["PySide6", "numpy", "matplotlib", "pyvista"]
-PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=5.0.0a1, <6.0.0"
+PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=5.0.0, <6.0.0"
 
 _context = None
 
