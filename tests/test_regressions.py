@@ -138,20 +138,20 @@ class TestDialogReload:
     def test_tab_handler_is_connected_once_across_reloads(
         self, plane_dialog, plane_out
     ):
-        signal = plane_dialog.tabs.currentChanged
+        signal = "2currentChanged(int)"
         before = plane_dialog.tabs.receivers(signal)
         assert plane_dialog.load_file(plane_out)
         assert plane_dialog.load_file(plane_out)
         assert plane_dialog.tabs.receivers(signal) == before
 
     def test_previous_tabs_are_deleted_on_reload(self, plane_dialog, plane_out):
-        from PyQt6 import sip
-        from PyQt6.QtCore import QCoreApplication, QEvent
+        import shiboken6
+        from PySide6.QtCore import QCoreApplication, QEvent
 
         old = plane_dialog.probe_tab
         assert plane_dialog.load_file(plane_out)
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
-        assert sip.isdeleted(old)
+        assert not shiboken6.isValid(old)
         assert plane_dialog.tabs.count() == 5
 
 
@@ -173,8 +173,8 @@ class TestStaleSlice:
 class TestDialogLifetime:
     def test_closed_dialog_is_deleted(self, qapp, fake_context, no_modals, plane_out):
         pytest.importorskip("matplotlib")
-        from PyQt6 import sip
-        from PyQt6.QtCore import QCoreApplication, QEvent
+        import shiboken6
+        from PySide6.QtCore import QCoreApplication, QEvent
 
         from orca_nics_analyzer.gui import NicsAnalyzerDialog
 
@@ -182,7 +182,7 @@ class TestDialogLifetime:
         assert dlg.load_file(plane_out)
         dlg.close()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
-        assert sip.isdeleted(dlg)
+        assert not shiboken6.isValid(dlg)
 
 
 class TestProbeTableScale:

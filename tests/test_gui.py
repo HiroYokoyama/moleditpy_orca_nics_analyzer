@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 np = pytest.importorskip("numpy")
-pytest.importorskip("PyQt6.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
-from PyQt6.QtCore import QMimeData, Qt, QUrl
-from PyQt6.QtWidgets import QPushButton
+from PySide6.QtCore import QMimeData, Qt, QUrl
+from PySide6.QtWidgets import QPushButton
 
 from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block
 from orca_nics_analyzer.icss3d_tab import (
@@ -89,11 +89,11 @@ def make_dialog(fake_context, request, tmp_path):
         return dialog
 
     yield _make
-    from PyQt6 import sip
+    import shiboken6
 
     for dialog in created:
         # A closed dialog deletes itself once the event loop runs.
-        if not sip.isdeleted(dialog):
+        if shiboken6.isValid(dialog):
             dialog.close()
 
 
@@ -314,7 +314,7 @@ class TestOpening:
 
     def test_is_not_modal(self, make_dialog, volume_out):
         """Dialog must not block the main window."""
-        from PyQt6.QtCore import Qt
+        from PySide6.QtCore import Qt
 
         dlg = make_dialog(volume_out)
         assert not dlg.isModal()
@@ -431,8 +431,8 @@ class TestMoleculeLoading:
 class TestDragAndDrop:
     def _drag_enter(self, dlg, mime):
         """Simulate a dragEnterEvent and return whether it was accepted."""
-        from PyQt6.QtCore import QPointF, Qt
-        from PyQt6.QtGui import QDragEnterEvent
+        from PySide6.QtCore import QPointF, Qt
+        from PySide6.QtGui import QDragEnterEvent
 
         pos = QPointF(10.0, 10.0)
         event = QDragEnterEvent(
@@ -447,8 +447,8 @@ class TestDragAndDrop:
 
     def _drop(self, dlg, mime):
         """Simulate a dropEvent and return whether it was accepted."""
-        from PyQt6.QtCore import QPointF, Qt
-        from PyQt6.QtGui import QDropEvent
+        from PySide6.QtCore import QPointF, Qt
+        from PySide6.QtGui import QDropEvent
 
         pos = QPointF(10.0, 10.0)
         event = QDropEvent(
@@ -552,7 +552,7 @@ class TestProbeTable:
         assert index.data(Qt.ItemDataRole.BackgroundRole) is None
 
     def test_copy_csv_reaches_the_clipboard(self, make_dialog, single_out):
-        from PyQt6.QtGui import QGuiApplication
+        from PySide6.QtGui import QGuiApplication
 
         dialog = make_dialog(single_out)
         dialog.probe_tab.copy_csv()
@@ -1863,7 +1863,7 @@ class TestMap2DSliceControls:
         assert listener.called
 
     def test_icss3d_slice_group_structure(self, make_dialog, volume_out):
-        from PyQt6.QtWidgets import QGroupBox
+        from PySide6.QtWidgets import QGroupBox
 
         dlg = make_dialog(volume_out)
         assert isinstance(dlg.icss_tab.slice_group, QGroupBox)
@@ -1871,7 +1871,7 @@ class TestMap2DSliceControls:
         # Verify show_cut_axis is child of slice_group
         assert dlg.icss_tab.show_cut_axis.parentWidget() is dlg.icss_tab.slice_group
         # Verify vector checkbox is removed from 3D slice group
-        from PyQt6.QtWidgets import QCheckBox
+        from PySide6.QtWidgets import QCheckBox
 
         checkbox_texts = [
             cb.text() for cb in dlg.icss_tab.slice_group.findChildren(QCheckBox)
@@ -1881,7 +1881,7 @@ class TestMap2DSliceControls:
 
 class TestHeaderAndVectorSettings:
     def test_two_line_header_layout_structure(self, make_dialog, single_out):
-        from PyQt6.QtWidgets import QHBoxLayout
+        from PySide6.QtWidgets import QHBoxLayout
 
         dlg = make_dialog(single_out)
         # Header settings layout has two QHBoxLayout rows
@@ -2100,4 +2100,4 @@ class TestMap2DImprovements:
     def test_plugin_version_is_0_6_0(self):
         import orca_nics_analyzer
 
-        assert orca_nics_analyzer.PLUGIN_VERSION == "0.6.0"
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.7.0"

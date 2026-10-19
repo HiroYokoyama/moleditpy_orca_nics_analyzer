@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 np = pytest.importorskip("numpy")
-pytest.importorskip("PyQt6.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets")
 
 import orca_nics_analyzer as plugin
 
@@ -59,7 +59,7 @@ class TestOpenFile:
         fake_context.register_window.assert_any_call("nics_analyzer", dialog)
 
     def test_output_without_probes_is_refused(self, no_ghosts_out, fake_context):
-        with patch("PyQt6.QtWidgets.QMessageBox.warning") as warn:
+        with patch("PySide6.QtWidgets.QMessageBox.warning") as warn:
             plugin._open_file(no_ghosts_out, fake_context)
         assert warn.called
         assert "No NICS probes" in warn.call_args.args[1]

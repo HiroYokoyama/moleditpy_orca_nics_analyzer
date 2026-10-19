@@ -29,7 +29,8 @@ class TestMetadata:
         assert getattr(plugin, name, None) not in (None, "")
 
     def test_version_is_semver(self):
-        assert re.fullmatch(r"\d+\.\d+\.\d+", plugin.PLUGIN_VERSION)
+        from packaging.version import Version
+        assert Version(plugin.PLUGIN_VERSION).public == plugin.PLUGIN_VERSION
 
     def test_tags_and_dependencies_are_lists_of_strings(self):
         for value in (plugin.PLUGIN_TAGS, plugin.PLUGIN_DEPENDENCIES):
@@ -41,7 +42,7 @@ class TestMetadata:
             assert name in plugin.PLUGIN_DEPENDENCIES
 
     def test_supported_host_range(self):
-        assert plugin.PLUGIN_SUPPORTED_MOLEDITPY_VERSION == ">=4.0.0, <5.0.0"
+        assert plugin.PLUGIN_SUPPORTED_MOLEDITPY_VERSION == ">=5.0.0, <6.0.0"
 
     def test_entry_point_exists(self):
         assert callable(plugin.initialize)

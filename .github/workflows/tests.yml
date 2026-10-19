@@ -6,16 +6,23 @@ on:
   pull_request:
     branches: [main, dev]
   workflow_dispatch:
+    inputs:
+      moleditpy_ref:
+        description: 'MoleditPy branch, tag, or full commit SHA (blank uses repository default)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 env:
+  MOLEDITPY_REF: ${{ inputs.moleditpy_ref || vars.MOLEDITPY_REF || 'migrate/pyside6-without-openbabel' }}
   QT_QPA_PLATFORM: offscreen
 
 jobs:
   # -------------------------------------------------------------------------
-  # Full suite, with the real PyQt6 / matplotlib / pyvista stack so the GUI
+  # Full suite, with the real PySide6-Essentials / matplotlib / pyvista stack so the GUI
   # and the isosurface code are genuinely exercised rather than mocked.
   # -------------------------------------------------------------------------
   test:
@@ -42,7 +49,7 @@ jobs:
             libxcb-xinerama0 libxrender1
 
       - name: Install dependencies
-        run: pip install pytest pytest-cov numpy matplotlib PyQt6 pyvista
+        run: pip install pytest pytest-cov numpy matplotlib PySide6-Essentials pyvista
 
       - name: Run tests with coverage
         run: python -m pytest tests/ -v --tb=short --cov=orca_nics_analyzer --cov-report=term-missing
@@ -92,10 +99,13 @@ jobs:
       # Must land outside the repo: test_api.py scans every .py under the
       # plugin root, so a clone inside it would check the app against itself.
       - name: Clone main MoleditPy application
+        shell: bash
         run: |
-          git clone --depth 1 \
-            https://github.com/HiroYokoyama/python_molecular_editor.git \
-            ../python_molecular_editor
+          git init "../python_molecular_editor"
+          git -C "../python_molecular_editor" remote add origin https://github.com/HiroYokoyama/python_molecular_editor.git
+          git -C "../python_molecular_editor" fetch --depth 1 origin "$MOLEDITPY_REF"
+          git -C "../python_molecular_editor" checkout --detach FETCH_HEAD
+          git -C "../python_molecular_editor" log -1 --format="%H %s"
 
       - name: Check the plugin API against the main app
         run: python -m pytest tests/test_api.py -v --tb=short

@@ -18,7 +18,7 @@ from .parser import MAX_OUTPUT_BYTES
 logger = logging.getLogger(__name__)
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.6.0"
+PLUGIN_VERSION = "0.7.0"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
@@ -26,8 +26,8 @@ PLUGIN_DESCRIPTION = (
 )
 PLUGIN_CATEGORY = "Analysis"
 PLUGIN_TAGS = ["Analysis", "Visualization"]
-PLUGIN_DEPENDENCIES = ["PyQt6", "numpy", "matplotlib", "pyvista"]
-PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=4.0.0, <5.0.0"
+PLUGIN_DEPENDENCIES = ["PySide6", "numpy", "matplotlib", "pyvista"]
+PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=5.0.0, <6.0.0"
 
 _context = None
 
@@ -65,7 +65,7 @@ def _read_output_file(path, parent_widget):
 
 
 def _warn(parent, title, text):
-    from PyQt6.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     QMessageBox.critical(parent, title, text)
 
@@ -85,7 +85,7 @@ def parse_output_file(path, parent_widget):
     parser = NicsParser()
     parser.load_from_memory(content, path)
 
-    from PyQt6.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     if not parser.data["ghost_indices"]:
         QMessageBox.warning(
@@ -103,7 +103,7 @@ def parse_output_file(path, parent_widget):
 
 
 def _warn_missing_shieldings(parent):
-    from PyQt6.QtWidgets import QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     QMessageBox.warning(
         parent,
@@ -188,7 +188,7 @@ def initialize(context):
 def run(mw=None):  # pragma: no cover - host convenience entry point
     """Alternative entry point used when the host runs the plugin directly."""
     if _context is not None:
-        from PyQt6.QtWidgets import QFileDialog
+        from PySide6.QtWidgets import QFileDialog
 
         path, _ = QFileDialog.getOpenFileName(
             _context.get_main_window(),

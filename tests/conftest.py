@@ -71,7 +71,7 @@ def isolated_settings(tmp_path, monkeypatch):
     """
     try:
         from orca_nics_analyzer import gui, settings
-    except ImportError:  # PyQt6 is optional in the bare-pytest CI tier
+    except ImportError:  # PySide6 is optional in the bare-pytest CI tier
         return
     path = str(tmp_path / "test_settings.json")
     monkeypatch.setattr(settings, "SETTINGS_FILE", path)
@@ -80,8 +80,8 @@ def isolated_settings(tmp_path, monkeypatch):
 
 @pytest.fixture(scope="session")
 def qapp():
-    """One QApplication for the whole session; skips when PyQt6 is absent."""
-    QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
+    """One QApplication for the whole session; skips when PySide6 is absent."""
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets")
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     return app
 
@@ -89,7 +89,7 @@ def qapp():
 @pytest.fixture
 def no_modals(monkeypatch):
     """Neutralize every modal, so a warning path can never block the run."""
-    QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
+    QtWidgets = pytest.importorskip("PySide6.QtWidgets")
     calls = []
     for name in ("information", "warning", "critical", "question"):
         monkeypatch.setattr(
@@ -120,7 +120,7 @@ def fake_context(qapp, fake_plotter):
     """
     from unittest.mock import MagicMock
 
-    from PyQt6.QtWidgets import QWidget
+    from PySide6.QtWidgets import QWidget
 
     main_window = QWidget()
     main_window.plotter = fake_plotter

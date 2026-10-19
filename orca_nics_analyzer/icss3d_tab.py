@@ -4,8 +4,8 @@ import logging
 import os
 
 import numpy as np
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -141,7 +141,7 @@ class Icss3DTab(QWidget):
     """
 
     #: The cut axis or slice moved, so a 2D view of this volume is stale.
-    slice_settings_changed = pyqtSignal()
+    slice_settings_changed = Signal()
 
     def __init__(
         self,

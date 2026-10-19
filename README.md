@@ -1,5 +1,7 @@
 # ORCA NICS Analyzer
 
+This branch targets **MoleditPy 5.0.0a1–5.x** and uses **PySide6**. Plugin licensing is unchanged.
+
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21731440.svg)](https://doi.org/10.5281/zenodo.21731440)
 [![Tests](https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/actions/workflows/tests.yml/badge.svg)](https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/actions/workflows/tests.yml)
 ![coverage](https://img.shields.io/badge/coverage-%3E90%25-brightgreen)
@@ -37,7 +39,7 @@ Plugin Manager → install from
 `https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer`, or drop the
 `orca_nics_analyzer` folder into your MoleditPy plugins directory.
 
-Requires `PyQt6`, `numpy`, `matplotlib` and `pyvista`. The last two are optional at
+Requires `PySide6`, `numpy`, `matplotlib` and `pyvista`. The last two are optional at
 runtime — without them the tabs that need them explain what is missing and
 everything else keeps working.
 
@@ -96,10 +98,10 @@ carried through as-is rather than resampled onto a lab box.
 Install the development/test dependencies in a virtual environment:
 
 ```bash
-python -m pip install pytest pytest-cov numpy matplotlib PyQt6 pyvista
+python -m pip install pytest pytest-cov numpy matplotlib PySide6 pyvista
 ```
 
-`PyQt6`, `matplotlib` and `pyvista` are required for the complete GUI suite; the
+`PySide6`, `matplotlib` and `pyvista` are required for the complete GUI suite; the
 parser, analysis and cube I/O tests also run in a minimal environment with only
 `pytest` and `numpy`. On Linux CI, the Qt/VTK runtime additionally needs the
 standard X11/EGL libraries listed in `.github/workflows/tests.yml`.
@@ -140,4 +142,8 @@ against the main application when both repos are checked out side by side.
 
 ## License
 
-GNU General Public License v3.0 or later — see [LICENSE](LICENSE).
+GNU Lesser General Public License v3.0 or later — see [LICENSE](LICENSE).
+
+## Licensing scope
+
+First-party code in this migration is LGPL-3.0-or-later. See [LICENSE](LICENSE), [COPYING](COPYING) and [dependency/provenance terms](LICENSING.md). Third-party components and historical releases retain their own terms.

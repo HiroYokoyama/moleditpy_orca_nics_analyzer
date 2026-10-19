@@ -8,9 +8,9 @@ building — and rebuilding on every NICS_zz axis change — take seconds.
 import logging
 import os
 
-from PyQt6.QtCore import QAbstractTableModel, QSortFilterProxyModel, Qt
-from PyQt6.QtGui import QBrush, QColor, QGuiApplication
-from PyQt6.QtWidgets import (
+from PySide6.QtCore import QAbstractTableModel, QSortFilterProxyModel, Qt
+from PySide6.QtGui import QBrush, QColor, QGuiApplication
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QFileDialog,
