@@ -1,7 +1,5 @@
 # ORCA NICS Analyzer
 
-This branch targets **MoleditPy 5.0.0a1–5.x** and uses **PySide6**. Plugin licensing is unchanged.
-
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21731440.svg)](https://doi.org/10.5281/zenodo.21731440)
 [![Tests](https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/actions/workflows/tests.yml/badge.svg)](https://github.com/HiroYokoyama/moleditpy_orca_nics_analyzer/actions/workflows/tests.yml)
 ![coverage](https://img.shields.io/badge/coverage-%3E90%25-brightgreen)
