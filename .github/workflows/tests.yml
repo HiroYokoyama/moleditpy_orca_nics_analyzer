@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  MOLEDITPY_REF: ${{ inputs.moleditpy_ref || vars.MOLEDITPY_REF || 'migrate/pyside6-without-openbabel' }}
+  MOLEDITPY_REF: ${{ inputs.moleditpy_ref || vars.MOLEDITPY_REF || 'main' }}
   QT_QPA_PLATFORM: offscreen
 
 jobs:
@@ -56,7 +56,7 @@ jobs:
 
   # -------------------------------------------------------------------------
   # The package must import and the pure-Python analysis must run when the
-  # optional plotting stack is absent — the host loads plugins at startup.
+  # optional plotting stack is absent  Ethe host loads plugins at startup.
   # -------------------------------------------------------------------------
   test-minimal:
     runs-on: ubuntu-latest
