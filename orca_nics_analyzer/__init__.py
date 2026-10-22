@@ -13,12 +13,12 @@ geometrically, so outputs prepared by any means are understood.
 import logging
 import os
 
-from .parser import MAX_OUTPUT_BYTES
+from .parser import read_output_text
 
 logger = logging.getLogger(__name__)
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.7.0"
+PLUGIN_VERSION = "0.7.1"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
@@ -34,33 +34,10 @@ _context = None
 
 def _read_output_file(path, parent_widget):
     """Read an ORCA output file, trying the encodings ORCA is seen to emit."""
-    # cp1252 before latin-1: latin-1 decodes any byte, so nothing after it
-    # would ever be tried.
     try:
-        if os.path.getsize(path) > MAX_OUTPUT_BYTES:
-            _warn(
-                parent_widget,
-                "File Too Large",
-                "ORCA output exceeds the supported 256 MiB size.",
-            )
-            return None
-    except OSError as exc:
+        return read_output_text(path)
+    except (OSError, ValueError) as exc:
         _warn(parent_widget, "Error Reading File", f"Could not read file:\n{exc}")
-        return None
-    for enc in ("utf-8", "utf-16", "cp1252", "latin-1"):
-        try:
-            with open(path, "r", encoding=enc) as fh:
-                return fh.read(MAX_OUTPUT_BYTES + 1)
-        except UnicodeError:
-            continue
-        except OSError as e:
-            _warn(parent_widget, "Error Reading File", f"Could not read file:\n{e}")
-            return None
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as fh:
-            return fh.read(MAX_OUTPUT_BYTES + 1)
-    except OSError as e:
-        _warn(parent_widget, "Error Reading File", f"Could not read file:\n{e}")
         return None
 
 
@@ -83,7 +60,12 @@ def parse_output_file(path, parent_widget):
     from .parser import NicsParser
 
     parser = NicsParser()
-    parser.load_from_memory(content, path)
+    try:
+        parser.load_from_memory(content, path)
+    except (ValueError, TypeError) as exc:
+        logger.warning("[orca_nics_analyzer] parsing output failed: %s", exc)
+        _warn(parent_widget, "Invalid ORCA Output", str(exc))
+        return None
 
     from PySide6.QtWidgets import QMessageBox
 

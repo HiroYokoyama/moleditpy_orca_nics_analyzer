@@ -52,6 +52,24 @@ def _is_rule(line):
 MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 
 
+def read_output_text(path):
+    """Read bounded ORCA text; use UTF-16 only for a byte-order-marked file."""
+    if os.path.getsize(path) > MAX_OUTPUT_BYTES:
+        raise ValueError("ORCA output exceeds the supported 256 MiB size")
+    with open(path, "rb") as handle:
+        raw = handle.read(MAX_OUTPUT_BYTES + 1)
+    if len(raw) > MAX_OUTPUT_BYTES:
+        raise ValueError("ORCA output exceeds the supported 256 MiB size")
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16", errors="replace")
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeError:
+            continue
+    raise ValueError("Could not decode ORCA output")
+
+
 class NicsParser:
     """Parse an ORCA ``.out``; results land in :attr:`data`."""
 
@@ -72,10 +90,7 @@ class NicsParser:
 
     # -- entry points ----------------------------------------------------
     def load(self, path):
-        if os.path.getsize(path) > MAX_OUTPUT_BYTES:
-            raise ValueError("ORCA output exceeds the supported 256 MiB size")
-        with open(path, "r", encoding="utf-8", errors="replace") as fh:
-            self.load_from_memory(fh.read(MAX_OUTPUT_BYTES + 1), path)
+        self.load_from_memory(read_output_text(path), path)
         return self.data
 
     def load_from_memory(self, content, path=None):
@@ -86,6 +101,17 @@ class NicsParser:
         self.filename = path
         self.data = self._empty()
         lines = content.splitlines()
+        start = 0
+        version = None
+        for i, line in enumerate(lines):
+            if re.match(r"^\s*Program Version\s+\d", line):
+                start = i
+                version = line
+            elif re.match(r"^\s*\*?\s*JOB NUMBER\s+\d+\s*\*?\s*$", line):
+                start = i
+        lines = lines[start:]
+        if version and not any("Program Version" in line for line in lines):
+            lines.insert(0, version)
         self._parse_version(lines)
         self._parse_geometry(lines)
         # Last property calculation wins, as in ORCA Result Analyzer. Scope
@@ -131,7 +157,13 @@ class NicsParser:
         ang = self._last_block(
             lines, "CARTESIAN COORDINATES (ANGSTROEM)", self._read_ang
         )
-        au = self._last_block(lines, "CARTESIAN COORDINATES (A.U.)", self._read_au)
+        ang_headers = [
+            i
+            for i, line in enumerate(lines)
+            if "CARTESIAN COORDINATES (ANGSTROEM)" in line
+        ]
+        au_lines = lines[ang_headers[-1] :] if ang_headers else lines
+        au = self._last_block(au_lines, "CARTESIAN COORDINATES (A.U.)", self._read_au)
 
         if not ang and not au:
             self.data["warnings"].append(
