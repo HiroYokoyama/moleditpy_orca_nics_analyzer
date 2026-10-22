@@ -2097,7 +2097,7 @@ class TestMap2DImprovements:
         assert ax.get_xlim() == (-2.5, 3.5)
         assert ax.get_ylim() == (1.0, 6.0)
 
-    def test_plugin_version_is_0_6_0(self):
+    def test_plugin_version_is_0_7_1(self):
         import orca_nics_analyzer
 
-        assert orca_nics_analyzer.PLUGIN_VERSION == "0.7.0"
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.7.1"

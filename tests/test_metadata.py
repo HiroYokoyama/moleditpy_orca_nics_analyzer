@@ -1,7 +1,6 @@
 """Plugin metadata contract — the registry scripts read these names."""
 
 import os
-import re
 from pathlib import Path
 
 import pytest
@@ -30,6 +29,7 @@ class TestMetadata:
 
     def test_version_is_semver(self):
         from packaging.version import Version
+
         assert Version(plugin.PLUGIN_VERSION).public == plugin.PLUGIN_VERSION
 
     def test_tags_and_dependencies_are_lists_of_strings(self):
