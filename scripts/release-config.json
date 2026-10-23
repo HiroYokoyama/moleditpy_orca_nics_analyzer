@@ -1,0 +1,19 @@
+{
+  "source": "orca_nics_analyzer/__init__.py",
+  "title": "ORCA NICS Analyzer",
+  "package": "orca_nics_analyzer",
+  "archive": "orca_nics_analyzer_{version}.zip",
+  "assets": [
+    "orca_nics_analyzer_{version}.zip"
+  ],
+  "include": [
+    "README.md",
+    "LICENSE",
+    "COPYING",
+    "LICENSING.md"
+  ],
+  "exclude": [
+    "*/__pycache__/*",
+    "*/.git/*"
+  ]
+}
