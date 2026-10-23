@@ -51,7 +51,13 @@ class TestMetadata:
         """release.yml checks the tag against this file; it must read this file."""
         path = os.path.join(ROOT, ".github", "workflows", "release.yml")
         text = Path(path).read_text(encoding="utf-8")
-        assert "orca_nics_analyzer/__init__.py" in text
+        assert "scripts/release_common.py verify" in text
+        import json
+
+        config = json.loads(
+            (Path(ROOT) / "scripts/release-config.json").read_text(encoding="utf-8")
+        )
+        assert config["source"] == "orca_nics_analyzer/__init__.py"
 
 
 class TestInitialize:
