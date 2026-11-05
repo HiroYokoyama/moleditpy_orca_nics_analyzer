@@ -4,7 +4,7 @@ import logging
 import os
 
 import numpy as np
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -72,6 +72,21 @@ def _xyz_block(atoms, include_probes):
         x, y, z = atom["xyz"]
         lines.append(f"{sym}  {x:.8f}  {y:.8f}  {z:.8f}")
     return "\n".join(lines)
+
+
+def accept_drop_as_copy(event) -> bool:
+    """Accept a file drag as a copy. False, and refused, if the source cannot copy.
+
+    Never acceptProposedAction(): Shift during a drag from Explorer proposes a
+    move, and accepting one tells Explorer the file now lives here, so it removes
+    the original. A dropped file is only ever read.
+    """
+    if not event.possibleActions() & Qt.DropAction.CopyAction:
+        event.ignore()
+        return False
+    event.setDropAction(Qt.DropAction.CopyAction)
+    event.accept()
+    return True
 
 
 class _WelcomeWidget(QWidget):
@@ -475,17 +490,23 @@ class NicsAnalyzerDialog(QDialog):
                 if url.isLocalFile():
                     ext = os.path.splitext(url.toLocalFile())[1].lower()
                     if ext in _ACCEPTED_EXTENSIONS:
-                        event.acceptProposedAction()
+                        accept_drop_as_copy(event)
                         return
         event.ignore()
+
+    def dragMoveEvent(self, event):
+        self.dragEnterEvent(event)
 
     def dropEvent(self, event: QDropEvent):
         for url in event.mimeData().urls():
             if url.isLocalFile():
                 path = url.toLocalFile()
                 ext = os.path.splitext(path)[1].lower()
-                if ext in _ACCEPTED_EXTENSIONS and self.load_file(path):
-                    event.acceptProposedAction()
+                if ext in _ACCEPTED_EXTENSIONS:
+                    # After the drop returns: loading can show an error dialog,
+                    # and the file manager stays frozen until this handler ends.
+                    if accept_drop_as_copy(event):
+                        QTimer.singleShot(0, self, lambda p=path: self.load_file(p))
                     return
         event.ignore()
 
