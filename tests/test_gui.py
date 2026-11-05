@@ -10,7 +10,7 @@ import pytest
 np = pytest.importorskip("numpy")
 pytest.importorskip("PySide6.QtWidgets")
 
-from PySide6.QtCore import QMimeData, Qt, QUrl
+from PySide6.QtCore import QCoreApplication, QMimeData, Qt, QUrl
 from PySide6.QtWidgets import QPushButton
 
 from orca_nics_analyzer.gui import NicsAnalyzerDialog, _xyz_block
@@ -459,7 +459,45 @@ class TestDragAndDrop:
             Qt.KeyboardModifier.NoModifier,
         )
         dlg.dropEvent(event)
+        QCoreApplication.processEvents()  # the load runs after the drop returns
         return event.isAccepted()
+
+    @staticmethod
+    def _shift_drop(mime, actions):
+        from PySide6.QtCore import QPointF, Qt
+        from PySide6.QtGui import QDropEvent
+
+        return QDropEvent(
+            QPointF(10.0, 10.0),
+            actions,
+            mime,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.ShiftModifier,
+        )
+
+    def test_a_shift_drop_is_a_copy_not_a_move(self, make_dialog, volume_out):
+        from PySide6.QtCore import Qt
+
+        dlg = make_dialog()
+        mime = _mime_for_path(volume_out)
+        event = self._shift_drop(mime, Qt.DropAction.CopyAction | Qt.DropAction.MoveAction)
+        assert event.proposedAction() == Qt.DropAction.MoveAction
+        dlg.dropEvent(event)
+        assert event.isAccepted()
+        assert event.dropAction() == Qt.DropAction.CopyAction
+        QCoreApplication.processEvents()
+        assert dlg._stack.currentIndex() == 1
+
+    def test_a_source_that_can_only_move_is_refused(self, make_dialog, volume_out):
+        from PySide6.QtCore import Qt
+
+        dlg = make_dialog()
+        mime = _mime_for_path(volume_out)
+        event = self._shift_drop(mime, Qt.DropAction.MoveAction)
+        dlg.dropEvent(event)
+        QCoreApplication.processEvents()
+        assert not event.isAccepted()
+        assert dlg._stack.currentIndex() == 0
 
     def test_accepts_out_file(self, make_dialog, volume_out):
         dlg = make_dialog()
@@ -500,15 +538,14 @@ class TestDragAndDrop:
         self._drop(dlg, mime)
         assert os.path.basename(single_out) in dlg.windowTitle()
 
-    def test_drop_rejects_when_load_fails(self, make_dialog, tmp_path):
-        """Dropping an unreadable file should not accept the event."""
+    def test_a_drop_that_fails_to_load_loads_nothing(self, make_dialog, tmp_path):
+        """The drop is answered before the load, so a failure only shows here."""
         bad = tmp_path / "empty.out"
         bad.write_text("")  # valid path, no ghosts — load_file returns False
         dlg = make_dialog()
         mime = _mime_for_path(str(bad))
-        accepted = self._drop(dlg, mime)
-        # load_file returns False (no probes) → dropEvent should not accept.
-        assert accepted is False
+        self._drop(dlg, mime)
+        assert dlg._stack.currentIndex() == 0
 
     def test_dialog_has_accept_drops_enabled(self, make_dialog):
         dlg = make_dialog()
@@ -2100,4 +2137,4 @@ class TestMap2DImprovements:
     def test_plugin_version_is_0_7_1(self):
         import orca_nics_analyzer
 
-        assert orca_nics_analyzer.PLUGIN_VERSION == "0.7.1"
+        assert orca_nics_analyzer.PLUGIN_VERSION == "0.7.2"
