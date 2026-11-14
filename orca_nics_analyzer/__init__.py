@@ -18,7 +18,7 @@ from .parser import read_output_text
 logger = logging.getLogger(__name__)
 
 PLUGIN_NAME = "ORCA NICS Analyzer"
-PLUGIN_VERSION = "0.7.2"
+PLUGIN_VERSION = "0.7.3"
 PLUGIN_AUTHOR = "HiroYokoyama"
 PLUGIN_DESCRIPTION = (
     "Analyze NICS data in ORCA output files: single-probe tables, 2D NICS maps "
@@ -26,7 +26,7 @@ PLUGIN_DESCRIPTION = (
 )
 PLUGIN_CATEGORY = "Analysis"
 PLUGIN_TAGS = ["Analysis", "Visualization"]
-PLUGIN_DEPENDENCIES = ["PySide6", "numpy", "matplotlib", "pyvista"]
+PLUGIN_DEPENDENCIES = ["PySide6-Essentials", "numpy", "matplotlib", "pyvista"]
 PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=5.0.0, <6.0.0"
 
 _context = None
